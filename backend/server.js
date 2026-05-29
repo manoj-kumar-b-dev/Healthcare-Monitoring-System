@@ -17,18 +17,20 @@ const healthScoreRoutes = require("./routes/healthScoreRoutes.js");
 const alertRoutes = require("./routes/alertRoutes.js");
 const keepWarm = require("./utils/keepWarm");
 const { getEmailDiagnostics } = require('./services/emailService');
+// CORS configuration origins array
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map(o => o.trim());
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true
   }
 });
 
 // Middleware
-const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map(o => o.trim());
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (server-to-server, curl) or matching origin
@@ -81,9 +83,10 @@ app.get('/api/email-status', (req, res) => {
   const httpStatus = diagnostics.verified ? 200 : 503;
   res.status(httpStatus).json({
     smtp: diagnostics.verified ? 'ok' : 'error',
+    emailService: diagnostics.verified ? 'ok' : 'error',
     ...diagnostics,
     hint: !diagnostics.verified
-      ? 'Check Render env vars: EMAIL_USER and EMAIL_APP_PASSWORD (16 chars, no spaces).'
+      ? 'No email service is configured. Please set RESEND_API_KEY in your environment.'
       : undefined,
   });
 });
@@ -108,5 +111,5 @@ initializeSockets(io);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`); // nodemon reload triggered
 });
