@@ -15,6 +15,7 @@ const reportRoutes = require("./routes/reportRoutes.js");
 const reminderRoutes = require("./routes/reminderRoutes.js");
 const healthScoreRoutes = require("./routes/healthScoreRoutes.js");
 const alertRoutes = require("./routes/alertRoutes.js");
+const keepWarm = require("./utils/keepWarm");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -47,9 +48,18 @@ app.use(express.urlencoded({ extended: true }));
 
 
 // Database connection
+// bufferCommands: false — operations fail fast on DB disconnect instead of
+// silently queuing, which would cause invisible hangs in production.
+mongoose.set('bufferCommands', false);
 connectDB();
 
+// ─── Keep-warm (production only) ────────────────────────────────────────────
+// Self-pings every 14 min to prevent Render free-tier cold starts (15 min idle).
+keepWarm();
+
 // Routes
+// ── Health-check / keep-warm ping (no auth, responds in microseconds) ────────
+app.get('/ping', (req, res) => res.status(200).json({ status: 'ok', ts: Date.now() }));
 app.use("/", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/vitals", vitalsRoutes);

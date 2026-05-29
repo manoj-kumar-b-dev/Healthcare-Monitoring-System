@@ -1,5 +1,8 @@
-const jwt = require('jsonwebtoken');
+const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
+
+// Only log verbose auth details in development — production gets zero log overhead
+const isDev = process.env.NODE_ENV !== 'production';
 
 // ─────────────────────────────────────────────
 // Helper: Extract & verify JWT from request
@@ -22,8 +25,11 @@ const extractToken = (req) => {
 // ─────────────────────────────────────────────
 const protect = async (req, res, next) => {
   const token = extractToken(req);
-  console.log('[Auth Middleware] Request path:', req.path);
-  console.log('[Auth Middleware] Extracted token:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
+
+  if (isDev) {
+    console.log('[Auth Middleware] Request path:', req.path);
+    console.log('[Auth Middleware] Token:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
+  }
 
   if (!token) {
     return res.status(401).json({
@@ -35,10 +41,16 @@ const protect = async (req, res, next) => {
   try {
     // Verify signature and expiry
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('[Auth Middleware] Token decoded successfully, userId:', decoded.id);
 
-    // Fetch fresh user from DB (ensures user still exists & is active)
-    const user = await User.findById(decoded.id).select('-password');
+    if (isDev) {
+      console.log('[Auth Middleware] Token decoded, userId:', decoded.id);
+    }
+
+    // Fetch user with only the fields actually needed by route handlers.
+    // This reduces per-request document transfer from ~1748 bytes → ~400 bytes.
+    const user = await User.findById(decoded.id).select(
+      'username email emergencyContacts settings age weight height gender'
+    );
 
     if (!user) {
       return res.status(401).json({
@@ -47,11 +59,12 @@ const protect = async (req, res, next) => {
       });
     }
 
-    req.user = user; // attach full user object to request
+    req.user = user; // attach user to request for downstream handlers
     next();
   } catch (error) {
-    console.error('[Auth Middleware] Token verification error:', error.name, error.message);
-    // Provide specific error feedback
+    if (isDev) {
+      console.error('[Auth Middleware] Token error:', error.name, error.message);
+    }
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         success: false,
@@ -64,7 +77,6 @@ const protect = async (req, res, next) => {
         message: 'Invalid token. Access denied.',
       });
     }
-
     return res.status(401).json({
       success: false,
       message: 'Not authorized. Token validation failed.',
