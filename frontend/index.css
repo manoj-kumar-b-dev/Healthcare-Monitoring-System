@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --color-medical-blue: #3B82F6;
+  --color-medical-blue-dark: #2563EB;
+  --color-medical-green: #10B981;
+  --color-medical-green-dark: #059669;
+
+  --color-status-success: #10B981;
+  --color-status-warning: #F59E0B;
+  --color-status-danger: #EF4444;
+
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900;
+}
