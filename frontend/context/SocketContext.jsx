@@ -16,7 +16,7 @@ export const SocketProvider = ({ children }) => {
     // Connect when user is authenticated and token exists
     if (user && token) {
       const newSocket = io(
-        import.meta.env.VITE_HEALTHCARE_SOCKET_URL || 'http://localhost:5000',
+        import.meta.env.VITE_SOCKET_URL,
         {
           auth: { token },
           reconnection: true,
