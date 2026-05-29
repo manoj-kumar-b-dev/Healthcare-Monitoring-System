@@ -58,54 +58,54 @@ function App() {
     <AuthProvider>
       <SocketProvider>
         <Router>
-          <HealthScoreProvider>
-            <Routes>
-              {/* Public routes */}
-              <Route 
-                path="/auth" 
-                element={
-                  <PublicRoute>
-                    <Auth />
-                  </PublicRoute>
-                } 
-              />
-              
-              {/* Protected routes with layout */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<Dashboard />} />
-                <Route path="profile" element={<Profile />} />
-                <Route path="contacts" element={<EmergencyContacts />} />
-                <Route path="reminders" element={<Reminders />} />
-                <Route path="reports" element={<Reports />} />
-                <Route path="history" element={<History />} />
-                <Route path="health-score" element={<HealthScorePage />} />
-              </Route>
-              
-              {/* Catch all route - redirect to home */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-            
-            {/* Toast notifications */}
-            <ToastContainer
-              position="top-right"
-              autoClose={5000}
-              hideProgressBar={false}
-              newestOnTop
-              closeOnClick
-              rtl={false}
-              pauseOnFocusLoss
-              draggable
-              pauseOnHover
-              theme="light"
+          <Routes>
+            {/* Public routes */}
+            <Route 
+              path="/auth" 
+              element={
+                <PublicRoute>
+                  <Auth />
+                </PublicRoute>
+              } 
             />
-          </HealthScoreProvider>
+            
+            {/* Protected routes with layout — HealthScoreProvider only mounts when authenticated */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <HealthScoreProvider>
+                    <Layout />
+                  </HealthScoreProvider>
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="contacts" element={<EmergencyContacts />} />
+              <Route path="reminders" element={<Reminders />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="history" element={<History />} />
+              <Route path="health-score" element={<HealthScorePage />} />
+            </Route>
+            
+            {/* Catch all route - redirect to home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          
+          {/* Toast notifications */}
+          <ToastContainer
+            position="top-right"
+            autoClose={5000}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="light"
+          />
         </Router>
       </SocketProvider>
     </AuthProvider>

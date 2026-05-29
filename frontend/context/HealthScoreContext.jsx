@@ -61,6 +61,12 @@ export const HealthScoreProvider = ({ children }) => {
 
   // ─── Core fetch function ───────────────────────────────────────────────────
   const fetchLatest = useCallback(async (showFullLoader = false) => {
+    // Safety guard: never call the API without a token
+    if (!localStorage.getItem('healthcare_token')) {
+      setLoading(false);
+      return;
+    }
+
     // Prevent duplicate concurrent requests
     if (fetchInFlightRef.current) return;
     fetchInFlightRef.current = true;
