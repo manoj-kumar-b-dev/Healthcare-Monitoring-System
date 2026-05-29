@@ -41,6 +41,10 @@ app.use(cors({
   credentials: true
 }));
 
+// Body parsers — MUST come before routes so req.body is populated
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // Database connection
 connectDB();
 
