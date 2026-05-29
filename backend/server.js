@@ -16,6 +16,7 @@ const reminderRoutes = require("./routes/reminderRoutes.js");
 const healthScoreRoutes = require("./routes/healthScoreRoutes.js");
 const alertRoutes = require("./routes/alertRoutes.js");
 const keepWarm = require("./utils/keepWarm");
+const { getEmailDiagnostics } = require('./services/emailService');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -70,6 +71,22 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/reminders", reminderRoutes);
 app.use("/api/health-score", healthScoreRoutes);
 app.use("/api/alerts", alertRoutes);
+
+// ── Email SMTP diagnostic endpoint ───────────────────────────────────────────
+// Safe to call anytime — returns SMTP config status without sending any email.
+// Use this immediately after deploying to Render to verify email is configured.
+// Example: GET https://your-backend.onrender.com/api/email-status
+app.get('/api/email-status', (req, res) => {
+  const diagnostics = getEmailDiagnostics();
+  const httpStatus = diagnostics.verified ? 200 : 503;
+  res.status(httpStatus).json({
+    smtp: diagnostics.verified ? 'ok' : 'error',
+    ...diagnostics,
+    hint: !diagnostics.verified
+      ? 'Check Render env vars: EMAIL_USER and EMAIL_APP_PASSWORD (16 chars, no spaces).'
+      : undefined,
+  });
+});
 
 app.get("/", (req, res) => {
   res.send("API is running successfully");

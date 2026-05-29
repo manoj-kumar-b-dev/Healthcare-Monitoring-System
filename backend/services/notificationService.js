@@ -46,25 +46,41 @@ const dispatchContactNotifications = async (contact, subject, emailHtml, smsText
 
   if (contact.email) {
     tasks.push(
-      sendEmailAlert(contact.email, subject, emailHtml).then((success) => ({
-        contactName:    contact.name,
-        contactMethod:  'email',
-        contactAddress: contact.email,
-        status: success ? 'success' : 'failed',
-        error:  success ? undefined : 'Email sending failed',
-      }))
+      sendEmailAlert(contact.email, subject, emailHtml)
+        .then((success) => ({
+          contactName:    contact.name,
+          contactMethod:  'email',
+          contactAddress: contact.email,
+          status: success ? 'success' : 'failed',
+          error:  success ? undefined : 'Email delivery failed — check Render logs for SMTP error details (code, response, responseCode)',
+        }))
+        .catch((err) => ({
+          contactName:    contact.name,
+          contactMethod:  'email',
+          contactAddress: contact.email,
+          status:         'failed',
+          error:          `Unexpected email error: ${err.message}`,
+        }))
     );
   }
 
   if (contact.phone) {
     tasks.push(
-      sendSMSAlert(contact.phone, smsText).then((success) => ({
-        contactName:    contact.name,
-        contactMethod:  'sms',
-        contactAddress: contact.phone,
-        status: success ? 'success' : 'failed',
-        error:  success ? undefined : 'SMS sending failed',
-      }))
+      sendSMSAlert(contact.phone, smsText)
+        .then((success) => ({
+          contactName:    contact.name,
+          contactMethod:  'sms',
+          contactAddress: contact.phone,
+          status: success ? 'success' : 'failed',
+          error:  success ? undefined : 'SMS delivery failed — check Render logs for Twilio error details',
+        }))
+        .catch((err) => ({
+          contactName:    contact.name,
+          contactMethod:  'sms',
+          contactAddress: contact.phone,
+          status:         'failed',
+          error:          `Unexpected SMS error: ${err.message}`,
+        }))
     );
   }
 
