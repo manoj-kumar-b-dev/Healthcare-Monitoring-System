@@ -506,35 +506,25 @@ const StepCounter = ({ dailyGoal = 10000 }) => {
                 {/* 2. Numeric Readouts */}
                 <div className="grid grid-cols-2 gap-2 bg-slate-900/50 p-2.5 rounded-xl border border-slate-900 text-slate-400">
                   <div>
-                    <span className="text-slate-600 font-bold uppercase">Raw Mag:</span>
+                    <span className="text-slate-600 font-bold uppercase">Raw magnitude:</span>
                     <span className="float-right text-slate-200 tabular-nums">{(debugData.rawMagnitude || 0).toFixed(3)} m/s²</span>
                   </div>
                   <div>
-                    <span className="text-slate-600 font-bold uppercase">HPF (HP):</span>
-                    <span className="float-right text-slate-200 tabular-nums">{(debugData.filteredMagnitude || 0).toFixed(3)} m/s²</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-600 font-bold uppercase">LPF (Smoothed):</span>
+                    <span className="text-slate-600 font-bold uppercase">Smoothed:</span>
                     <span className="float-right text-blue-400 font-bold tabular-nums">{(debugData.smoothedMagnitude || 0).toFixed(3)} m/s²</span>
                   </div>
                   <div>
-                    <span className="text-slate-600 font-bold uppercase">Adaptive Th:</span>
-                    <span className="float-right text-amber-500 tabular-nums">{(debugData.adaptiveThreshold || 0).toFixed(3)} m/s²</span>
+                    <span className="text-slate-600 font-bold uppercase">Threshold:</span>
+                    <span className="float-right text-amber-500 tabular-nums">11.5 m/s²</span>
                   </div>
                   <div>
-                    <span className="text-slate-600 font-bold uppercase">Cadence:</span>
-                    <span className="float-right text-slate-200 tabular-nums">{debugData.cadence || 0} SPM</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-600 font-bold uppercase">Variance (SD):</span>
-                    <span className="float-right text-slate-200 tabular-nums">{Math.sqrt(debugData.variance || 0).toFixed(3)}</span>
+                    <span className="text-slate-600 font-bold uppercase">Last step at:</span>
+                    <span className="float-right text-slate-200 tabular-nums">{debugData.lastStepAt || 'Never'}</span>
                   </div>
                   <div className="col-span-2 border-t border-slate-900 pt-1.5 mt-0.5 flex justify-between items-center">
-                    <span className="text-slate-600 font-bold uppercase">Step Confidence:</span>
-                    <span className={`font-black ${
-                      debugData.liveConfidence >= 0.65 ? 'text-emerald-500' : 'text-slate-500'
-                    }`}>
-                      {debugData.liveConfidence ? (debugData.liveConfidence * 100).toFixed(0) : 0}%
+                    <span className="text-slate-600 font-bold uppercase">Total steps:</span>
+                    <span className="font-black text-emerald-500 tabular-nums">
+                      {debugData.totalSteps || 0}
                     </span>
                   </div>
                 </div>

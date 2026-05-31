@@ -19,6 +19,9 @@ const CONFIG = {
   REQUIRED_CONSECUTIVE_STEPS: 3 // Minimum steps for rhythmic gait verification
 };
 
+const THRESHOLD = 11.5;
+const COOLDOWN_MS = 300;
+
 export const useStepCounter = () => {
   const { socket, connected } = useSocket();
   const [steps, setSteps] = useState(0);
@@ -73,6 +76,10 @@ export const useStepCounter = () => {
   
   // Gait validation refs
   const lastStepTimeRef = useRef(0);
+  const smoothedRef = useRef(9.8);
+  const peakRef = useRef(false);
+  const rawMagRef = useRef(0);
+  const smoothedDisplayRef = useRef(0);
   const lastStepIntervalRef = useRef(0);
   const unconfirmedStepsRef = useRef([]); // Timestamps of steps pending validation
   const sessionStepCountRef = useRef(0);
@@ -129,11 +136,7 @@ export const useStepCounter = () => {
         totalCount++;
         let x = 0, y = 0, z = 0;
         
-        if (event.acceleration) {
-          x = event.acceleration.x ?? 0;
-          y = event.acceleration.y ?? 0;
-          z = event.acceleration.z ?? 0;
-        } else if (event.accelerationIncludingGravity) {
+        if (event.accelerationIncludingGravity) {
           x = event.accelerationIncludingGravity.x ?? 0;
           y = event.accelerationIncludingGravity.y ?? 0;
           z = event.accelerationIncludingGravity.z ?? 0;
@@ -548,18 +551,9 @@ export const useStepCounter = () => {
 
   // Handler mapped from DeviceMotionEvent
   const handleDeviceMotion = useCallback((event) => {
-    let x = 0, y = 0, z = 0;
-
-    // Guard all fields — any can be null on some browsers/devices (Fix 3)
-    if (event.acceleration) {
-      x = event.acceleration.x ?? 0;
-      y = event.acceleration.y ?? 0;
-      z = event.acceleration.z ?? 0;
-    } else if (event.accelerationIncludingGravity) {
-      x = event.accelerationIncludingGravity.x ?? 0;
-      y = event.accelerationIncludingGravity.y ?? 0;
-      z = event.accelerationIncludingGravity.z ?? 0;
-    }
+    const x = event.accelerationIncludingGravity?.x ?? 0;
+    const y = event.accelerationIncludingGravity?.y ?? 0;
+    const z = event.accelerationIncludingGravity?.z ?? 0;
 
     // Keep track of the last reading for diagnostics
     lastReadingRef.current = { x, y, z };
@@ -586,8 +580,78 @@ export const useStepCounter = () => {
       nonZeroReceivedRef.current = true;
     }
 
-    processSensorData(x, y, z);
-  }, [processSensorData]);
+    const magnitude = Math.sqrt(x * x + y * y + z * z);
+    rawMagRef.current = magnitude;
+
+    // Exponential moving average smoothing
+    const alpha = 0.1;
+    smoothedRef.current = alpha * magnitude + (1 - alpha) * smoothedRef.current;
+    const smoothed = smoothedRef.current;
+    smoothedDisplayRef.current = smoothed;
+
+    const timeSinceLast = now - lastStepTimeRef.current;
+
+    // Peak detection: smoothed value crosses threshold and cooldown elapsed
+    if (
+      smoothed > THRESHOLD &&
+      !peakRef.current &&
+      timeSinceLast > COOLDOWN_MS
+    ) {
+      peakRef.current = true;
+      lastStepTimeRef.current = now;
+      
+      // Increment daily steps baseline
+      setSteps(prev => prev + 1);
+
+      // Increment active session steps if active
+      if (isSessionActive) {
+        sessionStepCountRef.current += 1;
+        sessionStepTimestampsRef.current.push(new Date(now));
+        sessionConfidencesRef.current.push(1.0);
+        setSessionSteps(sessionStepCountRef.current);
+        setIsWalking(true);
+      }
+    }
+
+    // Reset peak flag when value drops back below threshold
+    if (smoothed < THRESHOLD - 0.5) {
+      peakRef.current = false;
+    }
+
+    // Update debug stats (only if debug mode is toggled)
+    if (isDebugMode) {
+      // Compute sample rate
+      let sampleRate = 0;
+      if (sampleIntervalsRef.current.length > 0) {
+        const avgInterval = sampleIntervalsRef.current.reduce((a, b) => a + b, 0) / sampleIntervalsRef.current.length;
+        sampleRate = avgInterval > 0 ? Math.round(1000 / avgInterval) : 0;
+      }
+
+      // Compute null readings
+      const nullReadingsCount = nullReadingsWindowRef.current.reduce((a, b) => a + b, 0);
+
+      setDebugData({
+        rawMagnitude: magnitude,
+        smoothedMagnitude: smoothed,
+        threshold: THRESHOLD,
+        lastStepAt: lastStepTimeRef.current > 0 ? new Date(lastStepTimeRef.current).toLocaleTimeString() : 'Never',
+        totalSteps: sessionSteps,
+
+        // Also keep other fields for compatibility
+        recentPeaks: debugPeaksLogRef.current,
+        lastReading: lastReadingRef.current,
+        sampleRate,
+        nullReadingsCount
+      });
+    }
+
+    // Gait auto-teardown: Reset to buffer mode if idle for over 2.5s
+    if (lastStepTimeRef.current > 0 && now - lastStepTimeRef.current > 2500) {
+      if (isWalking) {
+        setIsWalking(false);
+      }
+    }
+  }, [isSessionActive, isWalking, isDebugMode, sessionSteps]);
 
   // Stop Session API & Backend Sync Integration
   const stopCounting = useCallback(async () => {
