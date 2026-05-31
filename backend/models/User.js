@@ -43,6 +43,13 @@ const userSchema = new mongoose.Schema({
     soundAlerts: { type: Boolean, default: true },
     dailyStepGoal: { type: Number, default: 10000, min: 0 },
     unit: { type: String, enum: ['metric', 'imperial'], default: 'metric' }
+  },
+  // ─── NEW: Timezone Support ────────────────────────────────────────────
+  timezone: {
+    type: String,
+    default: 'UTC',
+    description: 'IANA timezone (e.g., "America/New_York", "Asia/Kolkata")',
+    example: 'Asia/Kolkata'
   }
 }, { timestamps: true });
 

@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
+const rateLimit = require("express-rate-limit");
+const mongoSanitize = require("express-mongo-sanitize");
 require("dotenv").config();
 const connectDB = require("./db");
 const healthRoutes = require("./routes/heathRoutes");
@@ -49,6 +51,50 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ─── Security: MongoDB Injection Prevention ─────────────────────────────────
+// Express 5 compatibility layer: redefine req.query as writable since it's a getter by default in Express 5,
+// which prevents express-mongo-sanitize from crashing.
+app.use((req, res, next) => {
+  if (req.query) {
+    Object.defineProperty(req, 'query', {
+      value: req.query,
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  }
+  next();
+});
+
+// Prevents $ and . operator injection attacks
+app.use(mongoSanitize());
+
+// ─── Rate Limiting ──────────────────────────────────────────────────────────
+// Protect API endpoints from abuse
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 1000,                  // Limit each IP to 1000 requests per window
+  message: 'Too many requests from this IP, please try again later',
+  standardHeaders: true,      // Return rate limit info in RateLimit-* headers
+  legacyHeaders: false        // Disable X-RateLimit-* headers
+});
+
+const activityLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,   // 1 minute
+  max: 100,                   // Limit to 100 requests per minute
+  message: 'Too many activity updates, please try again in a minute'
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 5,                     // Limit login attempts to 5 per 15 minutes
+  skipSuccessfulRequests: true,  // Don't count successful requests
+  message: 'Too many login attempts, please try again later'
+});
+
+// Apply general rate limiter to all routes
+app.use(generalLimiter);
+
 
 // Database connection
 // bufferCommands: false — operations fail fast on DB disconnect instead of
@@ -64,11 +110,17 @@ keepWarm();
 // ── Health-check / keep-warm ping (no auth, responds in microseconds) ────────
 app.get('/ping', (req, res) => res.status(200).json({ status: 'ok', ts: Date.now() }));
 app.use("/", healthRoutes);
+
+// ── Auth routes with specific rate limiting ─────────────────────────────────
 app.use("/api/auth", authRoutes);
+
+// ── Activity routes with stricter rate limiting ────────────────────────────
+// (prevent spam step updates)
+app.use("/api/activities", activityLimiter, activityRoutes);
+
 app.use("/api/vitals", vitalsRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use("/api/user", userRoutes);
-app.use("/api/activities", activityRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/reminders", reminderRoutes);
 app.use("/api/health-score", healthScoreRoutes);

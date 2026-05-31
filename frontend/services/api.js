@@ -107,6 +107,7 @@ export const api = {
     addSteps: (data) => axiosInstance.post('/activities/steps', data),
     getWeekly: () => axiosInstance.get('/activities/weekly'),
     getStats: () => axiosInstance.get('/activities/stats'),
+    submitSession: (data) => axiosInstance.post('/activities/session', data),
   },
 
    reports: {

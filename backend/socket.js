@@ -135,26 +135,12 @@ const initializeSockets = (io) => {
      // Handle real-time step updates from mobile sensors
      socket.on('steps:update', async (data) => {
        try {
-         const today = new Date();
-         today.setUTCHours(0, 0, 0, 0);
-
-         const activity = await Activity.findOneAndUpdate(
-           { userId: socket.user._id, date: today },
-           {
-             $inc: { steps: data.steps },
-             $set: {
-               distance: data.distance,
-               caloriesBurned: data.calories,
-               updatedAt: new Date()
-             }
-           },
-           { upsert: true, new: true }
-         );
-
+         // The data from frontend is already the latest absolute values saved via API
+         // So we just need to broadcast it to other clients in the same room
          io.to(roomName).emit('steps:updated', {
-           steps: activity.steps,
-           calories: activity.caloriesBurned,
-           distance: activity.distance
+           steps: data.steps,
+           calories: data.calories,
+           distance: data.distance
          });
        } catch (error) {
          console.error('Step update error:', error);
