@@ -28,6 +28,9 @@ export const useStepCounter = () => {
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   
+  // Pre-session sensor validation state
+  const [sensorStatus, setSensorStatus] = useState('checking');
+
   // Session tracking states
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [sessionSteps, setSessionSteps] = useState(0);
@@ -45,13 +48,19 @@ export const useStepCounter = () => {
     cadence: 0,
     variance: 0,
     liveConfidence: 0,
-    recentPeaks: []
+    recentPeaks: [],
+    
+    // Diagnostics fields
+    lastReading: { x: 0, y: 0, z: 0 },
+    sampleRate: 0,
+    nullReadingsCount: 0
   });
 
   // Teardown / Listener references
   const abortControllerRef = useRef(null);
   const animationFrameRef = useRef(null);
   const sessionTimerRef = useRef(null);
+  const sensorTimeoutRef = useRef(null);
   
   // Real-time sensor states (Refs prevent React re-renders, fulfilling Performance constraints)
   const isBackgroundRef = useRef(false);
@@ -74,6 +83,13 @@ export const useStepCounter = () => {
 
   // Debug peaks logger ref
   const debugPeaksLogRef = useRef([]);
+
+  // Diagnostics tracking refs
+  const lastSampleTimeRef = useRef(0);
+  const sampleIntervalsRef = useRef([]);
+  const nullReadingsWindowRef = useRef([]);
+  const lastReadingRef = useRef({ x: 0, y: 0, z: 0 });
+  const nonZeroReceivedRef = useRef(false);
 
   // Check visibility for background polling throttle
   useEffect(() => {
@@ -102,46 +118,196 @@ export const useStepCounter = () => {
     fetchTodayActivity();
   }, [fetchTodayActivity]);
 
-  // Request permissions safely
+  // Run an active sensor validation probe for a given duration
+  const runProbeCheck = useCallback(async (durationMs = 1500) => {
+    console.log(`[useStepCounter] Probe: Starting ${durationMs}ms sensor health check...`);
+    return new Promise((resolve) => {
+      let nonZeroCount = 0;
+      let totalCount = 0;
+
+      const probeListener = (event) => {
+        totalCount++;
+        let x = 0, y = 0, z = 0;
+        
+        if (event.acceleration) {
+          x = event.acceleration.x ?? 0;
+          y = event.acceleration.y ?? 0;
+          z = event.acceleration.z ?? 0;
+        } else if (event.accelerationIncludingGravity) {
+          x = event.accelerationIncludingGravity.x ?? 0;
+          y = event.accelerationIncludingGravity.y ?? 0;
+          z = event.accelerationIncludingGravity.z ?? 0;
+        }
+
+        if (x !== 0 || y !== 0 || z !== 0) {
+          nonZeroCount++;
+        }
+      };
+
+      window.addEventListener('devicemotion', probeListener, { passive: true });
+
+      setTimeout(() => {
+        window.removeEventListener('devicemotion', probeListener);
+        console.log(`[useStepCounter] Probe finished. Total samples: ${totalCount}, Non-zero: ${nonZeroCount}`);
+        resolve(nonZeroCount >= 10);
+      }, durationMs);
+    });
+  }, []);
+
+  // Browser Compatibility Fallback Chain: DeviceMotionEvent
+  const fallbackToDeviceMotion = useCallback(async () => {
+    console.log('[useStepCounter] Fallback Chain 2: Trying window.DeviceMotionEvent listener');
+    if (typeof window !== 'undefined' && 'DeviceMotionEvent' in window) {
+      if (typeof DeviceMotionEvent.requestPermission === 'function') {
+        console.log('[useStepCounter] iOS device detected (DeviceMotionEvent.requestPermission exists). Awaiting gesture.');
+        setSensorStatus('needs-permission');
+        return 'needs-permission';
+      } else {
+        console.log('[useStepCounter] Android/Desktop path. Running validation probe...');
+        setSensorStatus('checking');
+        const isHealthy = await runProbeCheck(1500);
+        if (isHealthy) {
+          setSensorStatus('ready');
+          setPermissionGranted(true);
+          setPermissionDenied(false);
+          return 'ready';
+        } else {
+          setSensorStatus('unavailable');
+          setPermissionGranted(false);
+          return 'unavailable';
+        }
+      }
+    } else {
+      console.error('[useStepCounter] DeviceMotionEvent is not supported on this device/browser');
+      setSensorStatus('unavailable');
+      return 'unavailable';
+    }
+  }, [runProbeCheck]);
+
+  // Pre-session Sensor validation check
+  const sensorCheck = useCallback(async () => {
+    console.log('[useStepCounter] Running pre-session sensor check...');
+    
+    // Check HTTPS rule (Fix 6)
+    if (typeof window !== 'undefined') {
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        console.warn('[useStepCounter] HTTPS Enforcement check failed. Protocol is ' + window.location.protocol);
+        setSensorStatus('insecure');
+        return 'insecure';
+      }
+    }
+
+    // Try Fallback Chain (Fix 5)
+    try {
+      if (typeof Accelerometer !== 'undefined') {
+        console.log('[useStepCounter] Fallback Chain 1: Trying Generic Sensor API (Accelerometer)');
+        const acc = new Accelerometer({ frequency: 50 });
+        
+        return new Promise((resolve) => {
+          acc.onerror = (event) => {
+            console.error(`[useStepCounter] Accelerometer error: ${event.error.name} - ${event.error.message}`);
+            if (event.error.name === 'SecurityError') {
+              setSensorStatus('insecure');
+              resolve('insecure');
+            } else if (event.error.name === 'NotAllowedError') {
+              setSensorStatus('needs-permission');
+              resolve('needs-permission');
+            } else {
+              resolve(fallbackToDeviceMotion());
+            }
+          };
+
+          acc.onactivate = () => {
+            acc.stop();
+            console.log('[useStepCounter] Accelerometer API supported and active.');
+            setSensorStatus('ready');
+            setPermissionGranted(true);
+            setPermissionDenied(false);
+            resolve('ready');
+          };
+
+          acc.start();
+        });
+      } else {
+        throw new ReferenceError('Accelerometer is not defined');
+      }
+    } catch (err) {
+      console.log(`[useStepCounter] Generic Sensor API unsupported: ${err.name}. Falling back to DeviceMotionEvent...`);
+      return fallbackToDeviceMotion();
+    }
+  }, [fallbackToDeviceMotion]);
+
+  // Run sensor check on mount
+  useEffect(() => {
+    sensorCheck();
+  }, [sensorCheck]);
+
+  // Request permissions safely inside gesture (Fix 2)
   const requestPermission = useCallback(async () => {
     if (typeof window === 'undefined') return false;
 
-    // Evaluate compatibility chain
-    const hasDeviceMotion = typeof DeviceMotionEvent !== 'undefined';
-    const hasSensorApi = typeof LinearAccelerationSensor !== 'undefined';
-
-    if (!hasDeviceMotion && !hasSensorApi) {
-      toast.error('Motion sensors not supported on this browser or hardware');
-      setPermissionDenied(true);
+    // Check secure context
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      setSensorStatus('insecure');
+      toast.error('Motion sensors require HTTPS. Please access this app over a secure connection.');
       return false;
     }
 
+    console.log('[useStepCounter] Requesting motion sensor permission via gesture...');
     try {
-      if (hasDeviceMotion && typeof DeviceMotionEvent.requestPermission === 'function') {
-        // iOS requires explicit user gesture for permission
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        // iOS 13+ path
         const permissionState = await DeviceMotionEvent.requestPermission();
+        console.log('[useStepCounter] DeviceMotionEvent.requestPermission state:', permissionState);
+        
         if (permissionState === 'granted') {
           setPermissionGranted(true);
           setPermissionDenied(false);
-          return true;
+          setSensorStatus('checking');
+          
+          // Re-run probe automatically
+          const isHealthy = await runProbeCheck(1500);
+          if (isHealthy) {
+            setSensorStatus('ready');
+            toast.success('Motion sensor linked and verified!');
+            return true;
+          } else {
+            setSensorStatus('unavailable');
+            toast.error('Motion sensor verified as non-responsive.');
+            return false;
+          }
         } else {
           setPermissionDenied(true);
+          setSensorStatus('unavailable');
           toast.error('Motion sensor permission denied by user');
           return false;
         }
       } else {
-        // Android or older standard desktop browsers do not require prompt
+        // Android / Desktop standard path
         setPermissionGranted(true);
         setPermissionDenied(false);
-        return true;
+        setSensorStatus('checking');
+        
+        // Re-run probe automatically
+        const isHealthy = await runProbeCheck(1500);
+        if (isHealthy) {
+          setSensorStatus('ready');
+          toast.success('Motion sensor linked and verified!');
+          return true;
+        } else {
+          setSensorStatus('unavailable');
+          toast.error('Motion sensor verified as non-responsive.');
+          return false;
+        }
       }
     } catch (error) {
       console.error('[useStepCounter] Permission request error:', error);
       setPermissionDenied(true);
+      setSensorStatus('unavailable');
       toast.error('Failed to get motion sensor permissions');
       return false;
     }
-  }, []);
+  }, [runProbeCheck]);
 
   // DSP Pipeline logic running at 50Hz/25Hz
   const processSensorData = useCallback((x, y, z) => {
@@ -342,6 +508,16 @@ export const useStepCounter = () => {
       const variance = slidingWindowRef.current.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / slidingWindowRef.current.length;
       const cadence = lastStepIntervalRef.current > 0 ? Math.round(60000 / lastStepIntervalRef.current) : 0;
 
+      // Compute sample rate
+      let sampleRate = 0;
+      if (sampleIntervalsRef.current.length > 0) {
+        const avgInterval = sampleIntervalsRef.current.reduce((a, b) => a + b, 0) / sampleIntervalsRef.current.length;
+        sampleRate = avgInterval > 0 ? Math.round(1000 / avgInterval) : 0;
+      }
+
+      // Compute null readings
+      const nullReadingsCount = nullReadingsWindowRef.current.reduce((a, b) => a + b, 0);
+
       setDebugData({
         rawMagnitude: rawMag,
         filteredMagnitude: hpMag,
@@ -350,7 +526,12 @@ export const useStepCounter = () => {
         cadence,
         variance,
         liveConfidence,
-        recentPeaks: debugPeaksLogRef.current
+        recentPeaks: debugPeaksLogRef.current,
+        
+        // Dynamic diagnostics
+        lastReading: lastReadingRef.current,
+        sampleRate,
+        nullReadingsCount
       });
     }
 
@@ -369,71 +550,44 @@ export const useStepCounter = () => {
   const handleDeviceMotion = useCallback((event) => {
     let x = 0, y = 0, z = 0;
 
+    // Guard all fields — any can be null on some browsers/devices (Fix 3)
     if (event.acceleration) {
-      // Hardware-filtered acceleration (without gravity)
-      x = event.acceleration.x || 0;
-      y = event.acceleration.y || 0;
-      z = event.acceleration.z || 0;
+      x = event.acceleration.x ?? 0;
+      y = event.acceleration.y ?? 0;
+      z = event.acceleration.z ?? 0;
     } else if (event.accelerationIncludingGravity) {
-      // Fallback: raw reading including gravity
-      x = event.accelerationIncludingGravity.x || 0;
-      y = event.accelerationIncludingGravity.y || 0;
-      z = event.accelerationIncludingGravity.z || 0;
+      x = event.accelerationIncludingGravity.x ?? 0;
+      y = event.accelerationIncludingGravity.y ?? 0;
+      z = event.accelerationIncludingGravity.z ?? 0;
+    }
+
+    // Keep track of the last reading for diagnostics
+    lastReadingRef.current = { x, y, z };
+
+    // Record sample dynamic timing to calculate frequency (Hz)
+    const now = Date.now();
+    if (lastSampleTimeRef.current > 0) {
+      const interval = now - lastSampleTimeRef.current;
+      sampleIntervalsRef.current.push(interval);
+      if (sampleIntervalsRef.current.length > 50) {
+        sampleIntervalsRef.current.shift();
+      }
+    }
+    lastSampleTimeRef.current = now;
+
+    // Track null/zero readings window
+    const isNullOrZero = (x === 0 && y === 0 && z === 0);
+    nullReadingsWindowRef.current.push(isNullOrZero ? 1 : 0);
+    if (nullReadingsWindowRef.current.length > 50) {
+      nullReadingsWindowRef.current.shift();
+    }
+
+    if (!isNullOrZero) {
+      nonZeroReceivedRef.current = true;
     }
 
     processSensorData(x, y, z);
   }, [processSensorData]);
-
-  // Core Start Session API
-  const startCounting = useCallback(async () => {
-    // Audit check: guarantee permission and idempotency
-    if (isSessionActive) {
-      console.warn('[useStepCounter] Session already active. Idempotent block triggered.');
-      return;
-    }
-
-    const granted = await requestPermission();
-    if (!granted) return;
-
-    console.log('[useStepCounter] Initializing sensor tracking session...');
-
-    // 1. Instantiation check: teardown any existing stale listeners
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-    const { signal } = abortControllerRef.current;
-
-    // 2. Initialize fresh gait telemetry
-    sessionStepCountRef.current = 0;
-    sessionConfidencesRef.current = [];
-    sessionStepTimestampsRef.current = [];
-    unconfirmedStepsRef.current = [];
-    lastStepTimeRef.current = 0;
-    lastStepIntervalRef.current = 0;
-    debugPeaksLogRef.current = [];
-
-    // 3. Establish idempotency key and session parameters
-    sessionStartTimeRef.current = Date.now();
-    sessionIdempotencyKeyRef.current = `hms_session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-
-    setSessionSteps(0);
-    setSessionDuration(0);
-    setAverageConfidence(0);
-    setIsWalking(false);
-    setIsSessionActive(true);
-
-    // 4. Attach motion event listener bound with AbortController signal
-    window.addEventListener('devicemotion', handleDeviceMotion, { passive: true, signal });
-
-    // 5. Track duration using active interval
-    sessionTimerRef.current = setInterval(() => {
-      const elapsedSeconds = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
-      setSessionDuration(elapsedSeconds);
-    }, 1000);
-
-    toast.success('Gait sensor session loaded. Walk to begin.');
-  }, [isSessionActive, requestPermission, handleDeviceMotion]);
 
   // Stop Session API & Backend Sync Integration
   const stopCounting = useCallback(async () => {
@@ -449,6 +603,10 @@ export const useStepCounter = () => {
     if (sessionTimerRef.current) {
       clearInterval(sessionTimerRef.current);
       sessionTimerRef.current = null;
+    }
+    if (sensorTimeoutRef.current) {
+      clearTimeout(sensorTimeoutRef.current);
+      sensorTimeoutRef.current = null;
     }
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -516,6 +674,93 @@ export const useStepCounter = () => {
     }
   }, [isSessionActive, socket, connected]);
 
+  // Core Start Session API with Pre-Session Validation (Fix 4)
+  const startCounting = useCallback(async () => {
+    // Audit check: guarantee permission and idempotency
+    if (isSessionActive) {
+      console.warn('[useStepCounter] Session already active. Idempotent block triggered.');
+      return;
+    }
+
+    console.log('[useStepCounter] User clicked Start. Running 1.5s health check first...');
+    setSensorStatus('checking');
+    
+    const isProbeHealthy = await runProbeCheck(1500);
+    
+    if (!isProbeHealthy) {
+      console.warn('[useStepCounter] Start health check aborted: sensor not responding.');
+      setSensorStatus('unavailable');
+      toast.error(
+        "Sensor not responding. Please check:\n" +
+        "  ✗ Are you on HTTPS?\n" +
+        "  ✗ Has motion permission been granted in browser settings?\n" +
+        "  ✗ Is your device a mobile phone or tablet?",
+        { autoClose: 8000 }
+      );
+      return;
+    }
+
+    // Set status to ready
+    setSensorStatus('ready');
+    console.log('[useStepCounter] Sensor health verified. Initializing session tracking...');
+
+    // 1. Instantiation check: teardown any existing stale listeners
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
+
+    // 2. Initialize fresh gait telemetry
+    sessionStepCountRef.current = 0;
+    sessionConfidencesRef.current = [];
+    sessionStepTimestampsRef.current = [];
+    unconfirmedStepsRef.current = [];
+    lastStepTimeRef.current = 0;
+    lastStepIntervalRef.current = 0;
+    debugPeaksLogRef.current = [];
+
+    // Reset diagnostics buffers
+    sampleIntervalsRef.current = [];
+    nullReadingsWindowRef.current = [];
+    lastSampleTimeRef.current = 0;
+    nonZeroReceivedRef.current = false;
+
+    // 3. Establish idempotency key and session parameters
+    sessionStartTimeRef.current = Date.now();
+    sessionIdempotencyKeyRef.current = `hms_session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+
+    setSessionSteps(0);
+    setSessionDuration(0);
+    setAverageConfidence(0);
+    setIsWalking(false);
+    setIsSessionActive(true);
+
+    // 4. Attach motion event listener bound with AbortController signal
+    window.addEventListener('devicemotion', handleDeviceMotion, { passive: true, signal });
+
+    // 5. Sensor Data Null Guard Timeout: If no non-zero readings are received within 2 seconds, sensor is not working.
+    if (sensorTimeoutRef.current) {
+      clearTimeout(sensorTimeoutRef.current);
+    }
+    sensorTimeoutRef.current = setTimeout(() => {
+      if (!nonZeroReceivedRef.current) {
+        console.warn('[useStepCounter] 2-second timeout fired with no non-zero readings.');
+        setSensorStatus('unavailable');
+        stopCounting(); // Teardown active listeners
+        toast.error('Sensor is not responding. Automatically setting status to unavailable.');
+      }
+    }, 2000);
+
+    // 6. Track duration using active interval
+    sessionTimerRef.current = setInterval(() => {
+      const elapsedSeconds = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
+      setSessionDuration(elapsedSeconds);
+    }, 1000);
+
+    toast.success('Gait sensor session loaded. Walk to begin.');
+  }, [isSessionActive, runProbeCheck, handleDeviceMotion, stopCounting]);
+
   // Teardown hook on unmount
   useEffect(() => {
     return () => {
@@ -524,6 +769,9 @@ export const useStepCounter = () => {
       }
       if (sessionTimerRef.current) {
         clearInterval(sessionTimerRef.current);
+      }
+      if (sensorTimeoutRef.current) {
+        clearTimeout(sensorTimeoutRef.current);
       }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -609,6 +857,12 @@ export const useStepCounter = () => {
     sessionDuration,
     averageConfidence,
     syncingSession,
+    
+    // Pre-session validation and status
+    sensorStatus,
+    setSensorStatus,
+    runProbeCheck,
+    sensorCheck,
     
     // Debugging hooks
     isDebugMode,

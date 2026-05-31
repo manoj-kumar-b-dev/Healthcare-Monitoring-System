@@ -38,12 +38,27 @@ const StepCounter = ({ dailyGoal = 10000 }) => {
     averageConfidence,
     syncingSession,
     
+    // Pre-session status
+    sensorStatus,
+    
     // Debug hooks
     isDebugMode,
     setIsDebugMode,
     debugData,
     runLifecycleTest
   } = useStepCounter();
+
+  // Compute diagnostics values for real-time overlay
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const isSecure = isHttps || isLocalhost;
+  
+  const deviceMotionSupported = typeof DeviceMotionEvent !== 'undefined';
+  const permissionApiState = !deviceMotionSupported 
+    ? 'unsupported' 
+    : typeof DeviceMotionEvent.requestPermission === 'function' 
+      ? (permissionDenied ? 'denied' : 'exists') 
+      : 'not required';
 
   // Local state for sparkline magnitude history
   const [magnitudeHistory, setMagnitudeHistory] = useState([]);
@@ -279,17 +294,86 @@ const StepCounter = ({ dailyGoal = 10000 }) => {
 
       {/* Interactive Controls & Developer Console */}
       <div className="relative z-10 space-y-3.5">
-        {/* Main session action buttons */}
+        {/* Sensor Status Row (Fix 1) */}
+        <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-150 text-xs relative z-10">
+          <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">Sensor Status:</span>
+          <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+            {sensorStatus === 'checking' && (
+              <>
+                <span className="animate-pulse">⏳</span>
+                <span className="text-amber-600 font-bold">Checking sensor…</span>
+              </>
+            )}
+            {sensorStatus === 'ready' && (
+              <>
+                <span className="text-emerald-500">✅</span>
+                <span className="text-emerald-700 font-bold">Sensor active — ready to count</span>
+              </>
+            )}
+            {sensorStatus === 'needs-permission' && (
+              <>
+                <span className="text-orange-500">🔒</span>
+                <span className="text-orange-600 font-bold">Enable Motion Sensor</span>
+              </>
+            )}
+            {sensorStatus === 'unavailable' && (
+              <>
+                <span className="text-red-500">❌</span>
+                <span className="text-red-650 font-bold text-[11px] leading-tight">No motion sensor detected on this device</span>
+              </>
+            )}
+            {sensorStatus === 'insecure' && (
+              <>
+                <span className="text-red-500">⚠️</span>
+                <span className="text-red-655 font-bold text-[11px] leading-tight">HTTPS required for motion sensors</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Main session action buttons (Fix 2 & Fix 4) */}
         <div>
-          {!permissionGranted ? (
+          {sensorStatus === 'needs-permission' && (
             <button
               onClick={requestPermission}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl active:scale-[0.98] font-bold text-sm transition-all shadow-md shadow-blue-200/50 hover:shadow-lg"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl active:scale-[0.98] font-bold text-sm transition-all shadow-md shadow-orange-200/50 hover:shadow-lg"
             >
               <Play className="w-4 h-4 fill-white" />
-              Link Motion Sensors
+              Enable Motion Sensor
             </button>
-          ) : (
+          )}
+
+          {sensorStatus === 'checking' && (
+            <button
+              disabled
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 text-slate-450 border border-slate-200 rounded-2xl font-bold text-sm cursor-not-allowed animate-pulse"
+            >
+              <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+              Checking Sensor...
+            </button>
+          )}
+
+          {sensorStatus === 'insecure' && (
+            <button
+              disabled
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-400 border border-red-200 rounded-2xl font-bold text-sm cursor-not-allowed"
+            >
+              <AlertCircle className="w-4 h-4 text-red-400" />
+              HTTPS Required for Sensors
+            </button>
+          )}
+
+          {sensorStatus === 'unavailable' && (
+            <button
+              disabled
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 text-slate-450 border border-slate-250 rounded-2xl font-bold text-sm cursor-not-allowed"
+            >
+              <XCircle className="w-4 h-4 text-slate-400" />
+              Sensor Unsupported
+            </button>
+          )}
+
+          {sensorStatus === 'ready' && (
             <div className="flex gap-2.5">
               {!isSessionActive ? (
                 <button
@@ -323,7 +407,7 @@ const StepCounter = ({ dailyGoal = 10000 }) => {
         </div>
 
         {/* --- DEVELOPER PANEL & REAL-TIME PLOTTER (Deliverable 6) --- */}
-        {permissionGranted && (
+        {sensorStatus !== 'checking' && (
           <div className="border-t border-slate-100 pt-3">
             <button
               onClick={() => setIsDebugMode(prev => !prev)}
@@ -342,12 +426,65 @@ const StepCounter = ({ dailyGoal = 10000 }) => {
 
             {/* Expandable Debug Console */}
             {isDebugMode && (
-              <div className="mt-3 bg-slate-950 text-slate-300 rounded-2xl p-4 border border-slate-850 font-mono text-[10px] space-y-3 shadow-inner max-h-[350px] overflow-y-auto animate-slide-down">
+              <div className="mt-3 bg-slate-950 text-slate-300 rounded-2xl p-4 border border-slate-850 font-mono text-[10px] space-y-3 shadow-inner max-h-[380px] overflow-y-auto animate-slide-down">
                 
+                {/* Real-time Diagnostics Panel */}
+                <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-1.5 text-slate-300">
+                  <p className="text-slate-450 font-bold uppercase tracking-wider text-[9px] mb-2 flex items-center gap-1 border-b border-slate-800 pb-1.5">
+                    <Terminal className="w-3.5 h-3.5 text-indigo-400 animate-pulse" /> Sensor Health Diagnostics
+                  </p>
+                  <div className="grid grid-cols-1 gap-1 text-[10px] leading-relaxed">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Protocol:</span>
+                      <span className="font-semibold text-slate-350">
+                        {isSecure ? 'https ✅' : 'http ❌'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">DeviceMotionEvent:</span>
+                      <span className="font-semibold text-slate-350">
+                        {deviceMotionSupported ? 'supported ✅' : 'unsupported ❌'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Permission API:</span>
+                      <span className="font-semibold text-slate-350">
+                        {permissionApiState === 'exists' ? 'exists ✅' : permissionApiState === 'not required' ? 'not required ✅' : 'denied ❌'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Last reading:</span>
+                      <span className="font-semibold tabular-nums text-indigo-300">
+                        x: {(debugData.lastReading?.x ?? 0).toFixed(2)}  y: {(debugData.lastReading?.y ?? 0).toFixed(2)}  z: {(debugData.lastReading?.z ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Sample rate:</span>
+                      <span className="font-semibold tabular-nums text-emerald-400">
+                        {debugData.sampleRate ?? 0} Hz
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Null readings:</span>
+                      <span className="font-semibold tabular-nums text-amber-400">
+                        {debugData.nullReadingsCount ?? 0} / 50
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Status:</span>
+                      <span className={`font-bold uppercase ${
+                        sensorStatus === 'ready' ? 'text-emerald-400' : 'text-amber-400'
+                      }`}>
+                        {sensorStatus}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* 1. Oscilloscope Sparkline */}
                 <div>
                   <p className="text-slate-450 font-bold uppercase tracking-wider text-[9px] mb-1.5 flex items-center gap-1">
-                    <Activity className="w-3 h-3 text-blue-500" /> Real-time Gait Sparkline (Smoothed Mag)
+                    <Activity className="w-3 h-3 text-blue-500 animate-pulse" /> Real-time Gait Sparkline (Smoothed Mag)
                   </p>
                   <div className="relative h-16 w-full bg-slate-900/60 rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center">
                     {magnitudeHistory.length > 1 ? (
