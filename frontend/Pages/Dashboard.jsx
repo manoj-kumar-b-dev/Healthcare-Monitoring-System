@@ -14,16 +14,16 @@ import EmergencyButton from '../Components/emergency/EmergencyButton';
 import LocationDisplay from '../Components/emergency/LocationDisplay';
 import ActivityDashboard from '../Components/activity/ActivityDashboard';
 import StepCounter from '../Components/activity/StepCounter';
-import { 
+import {
   Footprints,
   Map,
-  Flame, 
-  TrendingUp, 
-  Trophy, 
-  Award, 
-  Zap, 
-  Sparkles,  
-  Compass,  
+  Flame,
+  TrendingUp,
+  Trophy,
+  Award,
+  Zap,
+  Sparkles,
+  Compass,
   Info,
 } from 'lucide-react';
 
@@ -40,7 +40,7 @@ const useAnimatedNumber = (target, duration = 1000) => {
     const totalSteps = 50;
     const increment = end / totalSteps;
     const stepTime = duration / totalSteps;
-    
+
     const timer = setInterval(() => {
       start += increment;
       if (start >= end) {
@@ -50,10 +50,10 @@ const useAnimatedNumber = (target, duration = 1000) => {
         setCurrent(Math.floor(start));
       }
     }, stepTime);
-    
+
     return () => clearInterval(timer);
   }, [target, duration]);
-  
+
   return current;
 };
 
@@ -214,7 +214,7 @@ const Dashboard = () => {
     if (weeklyData.length === 0) return 0;
     const todayDay = new Date().toLocaleDateString('en-US', { weekday: 'short' });
     const todayIndex = weeklyData.findIndex(w => w.day === todayDay);
-    
+
     if (todayIndex !== -1) {
       for (let i = todayIndex; i >= 0; i--) {
         if (weeklyData[i].steps >= dailyGoal) {
@@ -233,7 +233,7 @@ const Dashboard = () => {
     const half = Math.ceil(weeklyData.length / 2);
     const firstHalfSum = weeklyData.slice(0, half).reduce((acc, curr) => acc + curr.steps, 0);
     const secondHalfSum = weeklyData.slice(half).reduce((acc, curr) => acc + curr.steps, 0);
-    
+
     if (firstHalfSum === 0) return 0;
     const diff = secondHalfSum - firstHalfSum;
     return Math.round((diff / firstHalfSum) * 100);
@@ -271,38 +271,7 @@ const Dashboard = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Activity className="w-5 h-5 text-blue-600" />
-            <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">Live Telemetry</span>
-          </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Active Dashboard</h1>
-          <p className="text-slate-500 text-sm mt-1">Real-time monitoring via WebSocket pipeline.</p>
-        </div>
-
-        {/* Connection Badge */}
-        <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border font-semibold text-sm transition-all ${connected
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-            : 'bg-red-50 border-red-200 text-red-700'
-          }`}>
-          <div className="relative">
-            {connected
-              ? <Wifi className="w-4 h-4" />
-              : <WifiOff className="w-4 h-4" />
-            }
-            {connected && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
-            )}
-          </div>
-          <span>{connected ? 'Connected Live' : 'Disconnected'}</span>
-          {!connected && (
-            <button
-              onClick={handleReconnect}
-              className="ml-1 flex items-center gap-1 text-xs bg-red-600 text-white px-2.5 py-1 rounded-lg hover:bg-red-700 transition-colors"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Reconnect
-            </button>
-          )}
         </div>
       </div>
 
@@ -323,7 +292,7 @@ const Dashboard = () => {
       <QuickStats activities={activities} healthScore={healthScore} />
 
       {/* Step Counter */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* 1. Daily Step Card (StepCounter Component) */}
         <div className="lg:col-span-2">
@@ -337,9 +306,9 @@ const Dashboard = () => {
               <Award className="w-4 h-4 text-blue-600" /> Metrics Engine
             </span>
             <h3 className="text-xl font-extrabold text-slate-900 mb-6">Activity Analytics</h3>
-            
+
             <div className="space-y-4">
-              
+
               {/* Avg steps */}
               <div className="flex justify-between items-center pb-3.5 border-b border-slate-100">
                 <div className="flex items-center gap-3">

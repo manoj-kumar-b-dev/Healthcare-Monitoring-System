@@ -1,8 +1,7 @@
 import React, { memo } from 'react';
-import { Link } from 'react-router-dom';
 import { useHealthScore } from '../../context/HealthScoreContext';
 import CircularGauge from './CircularGauge';
-import { RefreshCw, ChevronRight, Clock, AlertCircle } from 'lucide-react';
+import { RefreshCw, Clock, AlertCircle } from 'lucide-react';
 
 /**
  * Compact dashboard widget showing the health score.
@@ -117,16 +116,6 @@ const HealthScoreWidget = memo(() => {
         </div>
       </div>
 
-      {/* Footer link */}
-      <div className="px-5 py-3 border-t border-inherit bg-white/40">
-        <Link
-          to="/health-score"
-          className="flex items-center justify-between text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors group"
-        >
-          <span>View full health report</span>
-          <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-        </Link>
-      </div>
     </div>
   );
 });

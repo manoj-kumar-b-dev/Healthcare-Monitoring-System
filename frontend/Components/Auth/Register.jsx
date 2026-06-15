@@ -1,31 +1,75 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { User, Mail, Lock, Activity, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Lock, Activity, Eye, EyeOff, ShieldCheck, Users } from 'lucide-react';
 
 function Register({ setLogin }) {
   const { register } = useAuth();
   const [formData, setFormData] = useState({
-    username: '', email: '', password: '',
-    age: '', weight: '', height: '', gender: 'male'
+    name: '',
+    email: '',
+    phone: '',
+    dateOfBirth: '',
+    gender: 'male',
+    password: '',
+    confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const handleSignUp = async (event) => {
     event.preventDefault();
     setError('');
+
+    // Field Validations
+    if (!formData.name.trim()) {
+      const msg = 'Full name is required.';
+      setError(msg);
+      return toast.error(msg);
+    }
+    if (!formData.email.trim()) {
+      const msg = 'Email address is required.';
+      setError(msg);
+      return toast.error(msg);
+    }
+    if (!formData.phone.trim()) {
+      const msg = 'Phone number is required.';
+      setError(msg);
+      return toast.error(msg);
+    }
+    if (!formData.dateOfBirth) {
+      const msg = 'Date of birth is required.';
+      setError(msg);
+      return toast.error(msg);
+    }
+    if (formData.password !== formData.confirmPassword) {
+      const msg = 'Passwords do not match.';
+      setError(msg);
+      return toast.error(msg);
+    }
+
     const passwordRegex = /^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z]).{6,20}$/;
-    if (!formData.username.trim()) return setError('Username cannot be empty.');
-    if (!passwordRegex.test(formData.password))
-      return setError('Password needs uppercase, lowercase, and numbers (min 6 chars).');
+    if (!passwordRegex.test(formData.password)) {
+      const msg = 'Password must be 6-20 characters and contain at least one uppercase letter, one lowercase letter, and one number.';
+      setError(msg);
+      return toast.error(msg);
+    }
+
     try {
       setLoading(true);
-      await register({ ...formData, age: Number(formData.age), weight: Number(formData.weight), height: Number(formData.height) });
-      toast.success('Medical Profile successfully created!');
+      await register({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        dateOfBirth: formData.dateOfBirth,
+        gender: formData.gender,
+        password: formData.password
+      });
+      toast.success('Clinical Medical Profile successfully created!');
     } catch (err) {
       const message = err.response?.data?.message || err.message || 'Failed to create account';
       setError(message);
@@ -35,112 +79,473 @@ function Register({ setLogin }) {
     }
   };
 
-  const inputCls = 'w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm';
+  const labelStyle = {
+    display: 'block',
+    fontSize: '12.5px',
+    fontWeight: '600',
+    color: '#344060',
+    marginBottom: '5px',
+    letterSpacing: '0.02em',
+  };
+
+  const inputStyle = {
+    width: '100%',
+    paddingLeft: '38px',
+    paddingRight: '14px',
+    paddingTop: '10px',
+    paddingBottom: '10px',
+    border: '1px solid #CBD5E1',
+    borderRadius: '10px',
+    fontSize: '13.5px',
+    color: '#1F2937',
+    background: '#F8FAFC',
+    outline: 'none',
+    transition: 'border-color 0.2s, box-shadow 0.2s, background-color 0.2s',
+    boxSizing: 'border-box',
+  };
+
+  const handleFocus = (e) => {
+    e.target.style.borderColor = '#2563EB';
+    e.target.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.10)';
+    e.target.style.backgroundColor = '#FFFFFF';
+  };
+
+  const handleBlur = (e) => {
+    e.target.style.borderColor = '#CBD5E1';
+    e.target.style.boxShadow = 'none';
+    e.target.style.backgroundColor = '#F8FAFC';
+  };
 
   return (
-    <div className="w-full max-w-xl mx-4 my-6">
-      <div className="bg-white rounded-3xl shadow-2xl shadow-slate-200/80 border border-slate-100 p-8 animate-fade-in">
-        {/* Brand */}
-        <div className="flex flex-col items-center mb-7">
-          <div className="w-14 h-14 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-teal-500/30">
-            <Activity className="w-7 h-7 text-white" />
+    <div className="w-full max-w-md">
+      {/* Card */}
+      <div
+        style={{
+          background: '#F5F7FA',
+          borderRadius: '20px',
+          border: '1px solid #CBD5E1',
+          boxShadow: '0 8px 32px rgba(15, 40, 80, 0.12), 0 2px 8px rgba(15, 40, 80, 0.06)',
+          padding: '36px 32px',
+          animation: 'fadeInUp 0.4s ease-out',
+        }}
+      >
+        {/* Logo & Header */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '28px' }}>
+          {/* Logo container */}
+          <div
+            style={{
+              width: '60px',
+              height: '60px',
+              background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '16px',
+              boxShadow: '0 4px 16px rgba(37, 99, 235, 0.22)',
+            }}
+          >
+            <Activity size={26} color="#ffffff" />
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Create Your Account</h1>
-          <p className="text-slate-500 text-sm mt-1">Enroll securely into the Healthcare System</p>
+
+          <h1
+            style={{
+              fontSize: '22px',
+              fontWeight: '700',
+              color: '#0F2040',
+              letterSpacing: '-0.3px',
+              margin: '0 0 4px 0',
+              fontFamily: 'inherit',
+            }}
+          >
+            Create Your Account
+          </h1>
+          <p style={{ fontSize: '13.5px', color: '#6B7A99', margin: 0, fontWeight: '400', textAlign: 'center' }}>
+            Join Smart Healthcare Monitoring
+          </p>
         </div>
 
-        {/* Error */}
+        {/* Error Banner */}
         {error && (
-          <div className="mb-5 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+          <div
+            style={{
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#FEF2F2',
+              border: '1px solid #FECACA',
+              color: '#B91C1C',
+              padding: '10px 14px',
+              borderRadius: '10px',
+              fontSize: '13px',
+              fontWeight: '500',
+            }}
+          >
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: '#EF4444',
+                flexShrink: 0,
+              }}
+            />
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSignUp} className="space-y-4">
-          {/* Row 1 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">Username</label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input name="username" value={formData.username} onChange={handleChange} className={inputCls} type="text" placeholder="johndoe" required />
+        {/* Form */}
+        <form onSubmit={handleSignUp} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          
+          {/* Grid Container */}
+          <div className="reg-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+            
+            {/* Full Name */}
+            <div className="reg-grid-item-span" style={{ gridColumn: 'span 2' }}>
+              <label htmlFor="reg-name" style={labelStyle}>Full Name</label>
+              <div style={{ position: 'relative' }}>
+                <User
+                  size={15}
+                  color="#8A96B0"
+                  style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)' }}
+                />
+                <input
+                  id="reg-name"
+                  name="name"
+                  type="text"
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="John Doe"
+                  required
+                  style={inputStyle}
+                  onFocus={handleFocus}
+                  onBlur={handleBlur}
+                />
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">Email Address</label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input name="email" value={formData.email} onChange={handleChange} className={inputCls} type="email" placeholder="you@example.com" required />
+
+            {/* Email Address */}
+            <div className="reg-grid-item-span" style={{ gridColumn: 'span 2' }}>
+              <label htmlFor="reg-email" style={labelStyle}>Email Address</label>
+              <div style={{ position: 'relative' }}>
+                <Mail
+                  size={15}
+                  color="#8A96B0"
+                  style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)' }}
+                />
+                <input
+                  id="reg-email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="you@example.com"
+                  required
+                  style={inputStyle}
+                  onFocus={handleFocus}
+                  onBlur={handleBlur}
+                />
               </div>
             </div>
-          </div>
 
-          {/* Password */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                name="password" value={formData.password} onChange={handleChange}
-                type={showPassword ? 'text' : 'password'}
-                className="w-full pl-10 pr-11 py-2.5 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
-                placeholder="Min 6 chars, upper + lower + number" required
-              />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label="Toggle visibility">
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          {/* Body Metrics */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">Body Metrics</label>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <input name="age" value={formData.age} onChange={handleChange} className={inputCls} type="number" placeholder="Age" required />
-              </div>
-              <div>
-                <input name="weight" value={formData.weight} onChange={handleChange} className={inputCls} type="number" placeholder="Weight (kg)" required />
-              </div>
-              <div>
-                <input name="height" value={formData.height} onChange={handleChange} className={inputCls} type="number" placeholder="Height (cm)" required />
+            {/* Phone Number */}
+            <div className="reg-grid-item-span" style={{ gridColumn: 'span 2' }}>
+              <label htmlFor="reg-phone" style={labelStyle}>Phone Number</label>
+              <div style={{ position: 'relative' }}>
+                <Phone
+                  size={15}
+                  color="#8A96B0"
+                  style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)' }}
+                />
+                <input
+                  id="reg-phone"
+                  name="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="+1 (555) 000-0000"
+                  required
+                  style={inputStyle}
+                  onFocus={handleFocus}
+                  onBlur={handleBlur}
+                />
               </div>
             </div>
+
+            {/* Date of Birth */}
+            <div className="reg-grid-item-half">
+              <label htmlFor="reg-dob" style={labelStyle}>Date of Birth</label>
+              <div style={{ position: 'relative' }}>
+                <Calendar
+                  size={15}
+                  color="#8A96B0"
+                  style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)' }}
+                />
+                <input
+                  id="reg-dob"
+                  name="dateOfBirth"
+                  type="date"
+                  value={formData.dateOfBirth}
+                  onChange={handleChange}
+                  required
+                  style={inputStyle}
+                  onFocus={handleFocus}
+                  onBlur={handleBlur}
+                />
+              </div>
+            </div>
+
+            {/* Gender */}
+            <div className="reg-grid-item-half">
+              <label htmlFor="reg-gender" style={labelStyle}>Gender</label>
+              <div style={{ position: 'relative' }}>
+                <Users
+                  size={15}
+                  color="#8A96B0"
+                  style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', zIndex: 2 }}
+                />
+                <select
+                  id="reg-gender"
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleChange}
+                  required
+                  style={{
+                    ...inputStyle,
+                    appearance: 'none',
+                    backgroundImage: 'url("data:image/svg+xml;utf8,%3Csvg%20fill%3D%27%238A96B0%27%20height%3D%2724%27%20viewBox%3D%270%200%2024%2024%27%20width%3D%2724%27%20xmlns%3D%27http%3D%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cpath%20d%3D%27M7%2010l5%205%205-5z%27%2F%3E%3Cpath%20d%3D%27M0%200h24v24H0z%27%20fill%3D%27none%27%2F%3E%3C%2Fsvg%3E")',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 10px center',
+                    cursor: 'pointer'
+                  }}
+                  onFocus={handleFocus}
+                  onBlur={handleBlur}
+                >
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Password */}
+            <div className="reg-grid-item-half">
+              <label htmlFor="reg-password" style={labelStyle}>Password</label>
+              <div style={{ position: 'relative' }}>
+                <Lock
+                  size={15}
+                  color="#8A96B0"
+                  style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)' }}
+                />
+                <input
+                  id="reg-password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  required
+                  style={{ ...inputStyle, paddingRight: '40px' }}
+                  onFocus={handleFocus}
+                  onBlur={handleBlur}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label="Toggle password visibility"
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#8A96B0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '2px',
+                  }}
+                >
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm Password */}
+            <div className="reg-grid-item-half">
+              <label htmlFor="reg-confirmPassword" style={labelStyle}>Confirm Password</label>
+              <div style={{ position: 'relative' }}>
+                <Lock
+                  size={15}
+                  color="#8A96B0"
+                  style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)' }}
+                />
+                <input
+                  id="reg-confirmPassword"
+                  name="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  required
+                  style={{ ...inputStyle, paddingRight: '40px' }}
+                  onFocus={handleFocus}
+                  onBlur={handleBlur}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  aria-label="Toggle confirm password visibility"
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#8A96B0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '2px',
+                  }}
+                >
+                  {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
           </div>
 
-          {/* Gender */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">Gender</label>
-            <select name="gender" value={formData.gender} onChange={handleChange} className={inputCls} required>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-
-          {/* Submit */}
+          {/* Submit Button */}
           <button
             type="submit"
             id="register-submit"
             disabled={loading}
-            className={`w-full mt-1 py-3 rounded-xl font-bold text-white text-sm transition-all duration-200
-              bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700
-              shadow-lg shadow-teal-500/30 hover:shadow-xl
-              disabled:opacity-70 disabled:cursor-wait flex items-center justify-center gap-2`}
+            style={{
+              marginTop: '10px',
+              width: '100%',
+              padding: '12px 0',
+              borderRadius: '10px',
+              fontWeight: '600',
+              fontSize: '14px',
+              color: '#FFFFFF',
+              background: loading
+                ? 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)'
+                : 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+              border: 'none',
+              cursor: loading ? 'wait' : 'pointer',
+              boxShadow: '0 2px 10px rgba(37, 99, 235, 0.28)',
+              transition: 'background 0.2s, box-shadow 0.2s, transform 0.1s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              opacity: loading ? 0.82 : 1,
+              letterSpacing: '0.01em',
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.target.style.background = 'linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%)';
+                e.target.style.boxShadow = '0 4px 16px rgba(37, 99, 235, 0.36)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.target.style.background = 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)';
+                e.target.style.boxShadow = '0 2px 10px rgba(37, 99, 235, 0.28)';
+              }
+            }}
           >
-            {loading && <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />}
-            {loading ? 'Creating Profile...' : 'Register Clinical Profile'}
+            {loading && (
+              <div
+                style={{
+                  width: '15px',
+                  height: '15px',
+                  borderRadius: '50%',
+                  border: '2px solid rgba(255,255,255,0.4)',
+                  borderTopColor: '#FFFFFF',
+                  animation: 'spin 0.7s linear infinite',
+                }}
+              />
+            )}
+            {loading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
+        {/* Security Badge */}
+        <div
+          style={{
+            marginTop: '22px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '5px',
+            color: '#8A96B0',
+            fontSize: '11.5px',
+          }}
+        >
+          <ShieldCheck size={12} color="#8A96B0" />
+          <span>HIPAA-compliant · 256-bit encrypted</span>
+        </div>
+
+        {/* Divider */}
+        <div
+          style={{
+            margin: '20px 0 16px',
+            height: '1px',
+            background: '#E4E9F0',
+          }}
+        />
+
+        {/* Footer */}
+        <p style={{ textAlign: 'center', fontSize: '13px', color: '#6B7A99', margin: 0 }}>
           Already have an account?{' '}
-          <button onClick={setLogin} type="button" className="font-bold text-teal-600 hover:text-teal-700 hover:underline">
+          <button
+            onClick={setLogin}
+            type="button"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: '600',
+              color: '#2563EB',
+              fontSize: '13px',
+              padding: 0,
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={(e) => (e.target.style.color = '#1D4ED8')}
+            onMouseLeave={(e) => (e.target.style.color = '#2563EB')}
+          >
             Sign In
           </button>
         </p>
       </div>
+
+      {/* Keyframe animations & responsive overrides injected globally */}
+      <style>{`
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(18px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        @media (max-width: 480px) {
+          .reg-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+          .reg-grid-item-span {
+            grid-column: span 1 !important;
+          }
+          .reg-grid-item-half {
+            grid-column: span 1 !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

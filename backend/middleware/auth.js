@@ -49,7 +49,7 @@ const protect = async (req, res, next) => {
     // Fetch user with only the fields actually needed by route handlers.
     // This reduces per-request document transfer from ~1748 bytes → ~400 bytes.
     const user = await User.findById(decoded.id).select(
-      'username email emergencyContacts settings age weight height gender'
+      'username email emergencyContacts settings age weight height gender name phone dateOfBirth'
     );
 
     if (!user) {

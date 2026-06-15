@@ -12,7 +12,6 @@ import EmergencyContacts from './Pages/EmergencyContacts';
 import Reminders from './Pages/Reminders';
 import Reports from './Pages/Reports';
 import History from './Pages/History';
-import HealthScorePage from './Pages/HealthScore';
 import Auth from './Components/Auth/Auth';
 
 // Protected Route component
@@ -86,7 +85,6 @@ function App() {
               <Route path="reminders" element={<Reminders />} />
               <Route path="reports" element={<Reports />} />
               <Route path="history" element={<History />} />
-              <Route path="health-score" element={<HealthScorePage />} />
             </Route>
             
             {/* Catch all route - redirect to home */}

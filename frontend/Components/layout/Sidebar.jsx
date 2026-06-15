@@ -1,17 +1,16 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, User, PhoneCall, FileText, History, Pill, Activity, HeartPulse } from 'lucide-react';
+import { LayoutDashboard, User, PhoneCall, FileText, History, Pill, Activity } from 'lucide-react';
 
 const Sidebar = () => {
   const location = useLocation();
 
   const navItems = [
-    { path: '/',            label: 'Dashboard',          icon: LayoutDashboard },
-    { path: '/health-score', label: 'Health Score',      icon: HeartPulse },
-    { path: '/profile',     label: 'My Profile',         icon: User },
-    { path: '/contacts',    label: 'Emergency Contacts', icon: PhoneCall },
-    { path: '/reminders',   label: 'Medicine Reminders', icon: Pill },
-    { path: '/reports',     label: 'Reports',            icon: FileText },
-    { path: '/history',     label: 'History',            icon: History },
+    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/profile', label: 'My Profile', icon: User },
+    { path: '/contacts', label: 'Emergency Contacts', icon: PhoneCall },
+    { path: '/reminders', label: 'Medicine Reminders', icon: Pill },
+    { path: '/reports', label: 'Reports', icon: FileText },
+    { path: '/History', label: 'Activity  History', icon: History },
   ];
 
   return (
@@ -38,11 +37,10 @@ const Sidebar = () => {
               key={item.path}
               to={item.path}
               aria-label={item.label}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all duration-200 group relative ${
-                isActive
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all duration-200 group relative ${isActive
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
-              }`}
+                }`}
             >
               {isActive && (
                 <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-300 rounded-r-full" />

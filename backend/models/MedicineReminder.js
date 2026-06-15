@@ -29,7 +29,11 @@ const reminderSchema = new mongoose.Schema({
   },
   time: [{
     type: String,
-    required: true
+    required: true,
+    validate: {
+      validator: (v) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(v),
+      message: (props) => `"${props.value}" is not a valid time. Use HH:MM in 24-hour format (e.g. 08:02, 13:17, 22:45)`
+    }
   }],
   startDate: {
     type: Date,
@@ -87,63 +91,46 @@ reminderSchema.methods.shouldNotify = function() {
 };
 
 // Method: Calculate next notification time based on frequency
+// Iterates all reminder times for today first; only advances to tomorrow
+// (or the next frequency interval) when every time for today has already passed.
 reminderSchema.methods.calculateNextNotification = function() {
   const now = new Date();
-  let next = new Date(this.lastNotified || now);
 
+  // 'As Needed' never schedules automatically
+  if (this.frequency === 'As Needed' || !this.time || this.time.length === 0) {
+    this.nextNotification = null;
+    return null;
+  }
+
+  // Sort times ascending so we always find the earliest next slot
+  const sortedTimes = [...this.time].sort();
+
+  // ── Step 1: Look for a time still remaining today ──────────────────────────
+  for (const timeStr of sortedTimes) {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const candidate = new Date(now);
+    candidate.setHours(hours, minutes, 0, 0);
+    if (candidate > now) {
+      this.nextNotification = candidate;
+      return candidate;
+    }
+  }
+
+  // ── Step 2: All today's times have passed — advance by frequency interval ──
+  let daysToAdd = 1; // default: tomorrow
   switch (this.frequency) {
-    case 'Once Daily':
-      next.setDate(next.getDate() + 1);
-      break;
-    case 'Twice Daily':
-      next.setDate(next.getDate() + 0.5); // 12 hours
-      next.setHours(next.getHours() + 12);
-      break;
-    case 'Three Times Daily':
-      next.setDate(next.getDate() + 0.33); // ~8 hours
-      next.setHours(next.getHours() + 8);
-      break;
-    case 'Four Times Daily':
-      next.setDate(next.getDate() + 0.25); // ~6 hours
-      next.setHours(next.getHours() + 6);
-      break;
-    case 'Weekly':
-      next.setDate(next.getDate() + 7);
-      break;
-    case 'As Needed':
-      next = null; // No automatic scheduling
-      break;
-    default:
-      next.setDate(next.getDate() + 1);
+    case 'Weekly':          daysToAdd = 7;  break;
+    case 'Once Daily':      daysToAdd = 1;  break;
+    case 'Twice Daily':     daysToAdd = 1;  break;
+    case 'Three Times Daily': daysToAdd = 1; break;
+    case 'Four Times Daily':  daysToAdd = 1; break;
+    default:                daysToAdd = 1;  break;
   }
 
-  // If specific times are set, adjust to the next occurrence
-  if (this.time && this.time.length > 0 && next) {
-    const today = now.getDay();
-    const currentHour = now.getHours();
-    const currentMinutes = now.getMinutes();
-
-    // Find next valid time from the schedule
-    let found = false;
-    for (const timeStr of this.time) {
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      const reminderTime = new Date(next);
-      reminderTime.setHours(hours, minutes, 0, 0);
-
-      if (reminderTime > now) {
-        next = reminderTime;
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
-      // All times passed today, schedule for tomorrow
-      next.setDate(next.getDate() + 1);
-      const firstTime = this.time[0].split(':').map(Number);
-      next.setHours(firstTime[0], firstTime[1], 0, 0);
-    }
-  }
+  const firstTime = sortedTimes[0].split(':').map(Number);
+  const next = new Date(now);
+  next.setDate(next.getDate() + daysToAdd);
+  next.setHours(firstTime[0], firstTime[1], 0, 0);
 
   this.nextNotification = next;
   return next;

@@ -47,6 +47,8 @@ const getProfile = async (req, res, next) => {
         _id: user._id,
         username: user.username,
         email: user.email,
+        name: user.name,
+        phone: user.phone,
         age: user.age,
         weight: user.weight,
         height: user.height,
@@ -73,7 +75,7 @@ const updateProfile = async (req, res, next) => {
   try {
     console.log('[Profile Controller] Update request body:', Object.keys(req.body));
     
-    const { age, weight, height, gender, dateOfBirth } = req.body;
+    const { age, weight, height, gender, dateOfBirth, name, phone } = req.body;
     
     // Validate incoming data
     const validationErrors = validateProfileData({ age, weight, height, gender, dateOfBirth });
@@ -101,6 +103,8 @@ const updateProfile = async (req, res, next) => {
     if (height !== undefined && height !== '') user.height = Number(height);
     if (gender !== undefined && gender !== '') user.gender = gender.toLowerCase();
     if (dateOfBirth !== undefined && dateOfBirth !== '') user.dateOfBirth = new Date(dateOfBirth);
+    if (name !== undefined && name !== '') user.name = name;
+    if (phone !== undefined && phone !== '') user.phone = phone;
     
     const updatedUser = await user.save();
     console.log('[Profile Controller] Profile updated successfully for user:', req.user._id);
@@ -112,6 +116,8 @@ const updateProfile = async (req, res, next) => {
         _id: updatedUser._id,
         username: updatedUser.username,
         email: updatedUser.email,
+        name: updatedUser.name,
+        phone: updatedUser.phone,
         age: updatedUser.age,
         weight: updatedUser.weight,
         height: updatedUser.height,

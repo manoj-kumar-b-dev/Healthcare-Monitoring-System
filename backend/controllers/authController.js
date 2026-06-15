@@ -12,11 +12,11 @@ const generateToken = (id) => {
 
 const register = async (req, res, next) => {
   try {
-    const { username, email, password, age, weight, height, gender } = req.body;
+    let { username, email, password, name, phone, dateOfBirth, gender, age, weight, height } = req.body;
 
     // Validation
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: 'Please provide username, email and password' });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Please provide email and password' });
     }
 
     if (password.length < 6) {
@@ -34,15 +34,45 @@ const register = async (req, res, next) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    // Generate a unique username if not provided
+    if (!username) {
+      let baseUsername = '';
+      if (name) {
+        baseUsername = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      }
+      if (baseUsername.length < 3 && email) {
+        baseUsername = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+      }
+      if (baseUsername.length < 3) {
+        baseUsername = 'user';
+      }
+
+      let isUnique = false;
+      let counter = 0;
+      username = baseUsername;
+      while (!isUnique) {
+        const existingUser = await User.findOne({ username });
+        if (!existingUser) {
+          isUnique = true;
+        } else {
+          counter++;
+          username = `${baseUsername}${counter}`;
+        }
+      }
+    }
+
     // Create user (password hashing is handled by the pre-save hook in User model) 
     const user = await User.create({
       username,
       email,
       password,
+      name,
+      phone,
+      dateOfBirth,
+      gender,
       age,
       weight,
-      height,
-      gender
+      height
     });
 
     if (user) {
@@ -51,6 +81,9 @@ const register = async (req, res, next) => {
           _id: user._id,
           username: user.username,
           email: user.email,
+          name: user.name,
+          phone: user.phone,
+          dateOfBirth: user.dateOfBirth,
           age: user.age,
           weight: user.weight,
           height: user.height,
@@ -88,6 +121,9 @@ const login = async (req, res, next) => {
         _id: user._id,
         username: user.username,
         email: user.email,
+        name: user.name,
+        phone: user.phone,
+        dateOfBirth: user.dateOfBirth,
         age: user.age,
         weight: user.weight,
         height: user.height,

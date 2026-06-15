@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, User, FileText, History, X, PhoneCall, Pill, HeartPulse } from 'lucide-react';
+import { Home, User, FileText, History, X, PhoneCall, Pill } from 'lucide-react';
 import { useEffect } from 'react';
 
 const MobileSidebar = ({ isOpen, onClose }) => {
@@ -26,7 +26,6 @@ const MobileSidebar = ({ isOpen, onClose }) => {
 
   const menuItems = [
     { path: '/',             label: 'Dashboard',          icon: Home },
-    { path: '/health-score', label: 'Health Score',       icon: HeartPulse },
     { path: '/profile',      label: 'My Profile',         icon: User },
     { path: '/contacts',     label: 'Emergency Contacts', icon: PhoneCall },
     { path: '/reminders',    label: 'Medicine Reminders', icon: Pill },

@@ -172,7 +172,7 @@ const Profile = () => {
           <Shield className="w-4 h-4 text-blue-600" />
           <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">Account</span>
         </div>
-        <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Patient Profile</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Profile</h1>
         <p className="text-slate-500 text-sm mt-1">Manage your personal health information and system settings.</p>
       </div>
 

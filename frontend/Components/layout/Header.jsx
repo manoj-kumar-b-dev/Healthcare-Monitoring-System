@@ -35,29 +35,16 @@ const Header = () => {
       {/* Right side */}
       <div className="flex items-center gap-3">
         {/* Connection Status */}
-        <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-          connected
-            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-            : 'bg-red-50 text-red-700 border-red-200'
-        }`}>
-          {connected
-            ? <Wifi className="w-3.5 h-3.5" />
-            : <WifiOff className="w-3.5 h-3.5" />
-          }
-          <span>{connected ? 'Live' : 'Offline'}</span>
-          {connected && <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse ml-0.5" />}
-        </div>
 
         {user && (
           <>
             {/* User Info */}
-            <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200">
+            <div className="flex items-center gap-2.5 pl-3">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow">
                 <User className="w-4 h-4 text-white" />
               </div>
               <div className="hidden sm:block">
                 <p className="text-sm font-semibold text-slate-800 leading-tight">{user.username || user.name}</p>
-                <p className="text-xs text-slate-400">Patient</p>
               </div>
             </div>
 
