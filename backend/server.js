@@ -23,12 +23,29 @@ const { getEmailDiagnostics } = require('./services/emailService');
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map(o => o.trim());
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true
+let server = app;
+let io = null;
+
+if (process.env.VERCEL !== 'true') {
+  server = http.createServer(app);
+  io = new Server(server, {
+    cors: {
+      origin: allowedOrigins,
+      methods: ["GET", "POST", "PUT", "DELETE"],
+      credentials: true
+    }
+  });
+  app.set('socketio', io);
+}
+
+// Database Connection Middleware — ensures connection is warm for serverless environments
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error("Database connection error in middleware:", err.message);
+    res.status(500).json({ success: false, message: "Database connection failed" });
   }
 });
 
@@ -100,11 +117,13 @@ app.use(generalLimiter);
 // bufferCommands: false — operations fail fast on DB disconnect instead of
 // silently queuing, which would cause invisible hangs in production.
 mongoose.set('bufferCommands', false);
-connectDB();
+if (process.env.VERCEL !== 'true') {
+  connectDB();
 
-// ─── Keep-warm (production only) ────────────────────────────────────────────
-// Self-pings every 14 min to prevent Render free-tier cold starts (15 min idle).
-keepWarm();
+  // ─── Keep-warm (production only) ────────────────────────────────────────────
+  // Self-pings every 14 min to prevent Render free-tier cold starts (15 min idle).
+  keepWarm();
+}
 
 // Routes
 // ── Health-check / keep-warm ping (no auth, responds in microseconds) ────────
@@ -158,10 +177,61 @@ app.use((err, req, res, next) => {
 });
 
 // Socket.io connection handling mapping imported cleanly over abstraction layer
-const initializeSockets = require("./socket");
-initializeSockets(io);
+if (io) {
+  const initializeSockets = require("./socket");
+  initializeSockets(io);
+}
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`); // nodemon reload triggered
-});
+// Socket.io Bridge route (only active in persistent mode so Vercel can delegate emits)
+if (process.env.VERCEL !== 'true') {
+  app.post('/api/socket-bridge/emit', async (req, res) => {
+    const { secret, room, event, payload } = req.body;
+    
+    // Verify shared secret to prevent abuse
+    if (!secret || secret !== process.env.SOCKET_BRIDGE_SECRET) {
+      return res.status(403).json({ success: false, message: 'Unauthorized bridge request' });
+    }
+    
+    if (!room || !event) {
+      return res.status(400).json({ success: false, message: 'Room and event are required' });
+    }
+    
+    try {
+      if (io) {
+        io.to(room).emit(event, payload);
+        return res.status(200).json({ success: true, message: `Bridged event ${event} to room ${room}` });
+      } else {
+        return res.status(500).json({ success: false, message: 'Socket.IO is not initialized on this server instance' });
+      }
+    } catch (error) {
+      console.error('[Socket Bridge] Error forwarding event:', error.message);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Start medicine reminder cron jobs in persistent server mode
+  connectDB().then(() => {
+    try {
+      const { startReminderCron, syncReminderSchedule, resetMissedNotifications, setSocketIO } = require('./cron/reminderCron');
+      setSocketIO(io);
+      syncReminderSchedule().then(() => {
+        resetMissedNotifications();
+        startReminderCron();
+      });
+    } catch (cronError) {
+      console.error('[Cron] Failed to initialize reminder scheduler:', cronError.message);
+    }
+  }).catch(err => {
+    console.error('[Cron] Failed to connect to DB for cron jobs:', err.message);
+  });
+}
+
+// Export app for Vercel Serverless environment
+module.exports = app;
+
+if (process.env.VERCEL !== 'true') {
+  const PORT = process.env.PORT || 5000;
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`); // nodemon reload triggered
+  });
+}

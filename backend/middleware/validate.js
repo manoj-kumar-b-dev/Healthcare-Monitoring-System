@@ -131,6 +131,42 @@ const validateVitalInput = [
       return true;
     }),
 
+  body('bloodPressureSystolic')
+    .optional()
+    .isNumeric()
+    .withMessage('Blood pressure systolic must be a number')
+    .custom(value => {
+      const num = parseFloat(value);
+      if (num < 0 || num > 300) {
+        throw new Error('Blood pressure systolic must be between 0 and 300 mmHg');
+      }
+      return true;
+    }),
+
+  body('bloodPressureDiastolic')
+    .optional()
+    .isNumeric()
+    .withMessage('Blood pressure diastolic must be a number')
+    .custom(value => {
+      const num = parseFloat(value);
+      if (num < 0 || num > 200) {
+        throw new Error('Blood pressure diastolic must be between 0 and 200 mmHg');
+      }
+      return true;
+    }),
+
+  body('bloodGlucose')
+    .optional()
+    .isNumeric()
+    .withMessage('Blood glucose must be a number')
+    .custom(value => {
+      const num = parseFloat(value);
+      if (num < 0 || num > 1000) {
+        throw new Error('Blood glucose must be between 0 and 1000 mg/dL');
+      }
+      return true;
+    }),
+
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

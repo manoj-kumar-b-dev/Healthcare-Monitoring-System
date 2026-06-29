@@ -50,7 +50,7 @@ const VitalSignCard = ({ type, value, previousValue }) => {
     }
   };
 
-  const currentConfig = config[type];
+  const currentConfig = config[type] || config['heartRate'];
   const status = currentConfig.evaluate(value);
   const Icon = currentConfig.icon;
 

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const VitalSign = require('./models/VitalSign');
 const Activity = require('./models/Activity');
+const { processEmergencyAlert } = require('./controllers/alertController');
 
 // Manage user specific vital generation intervals to prevent overlap and memory leaks
 const userIntervals = new Map();
@@ -68,21 +69,26 @@ const initializeSockets = (io) => {
             return;
           }
 
-          // Auto-generate Random Vital Signs Data algorithm setup
-          /*
-          formaula for generating random reading= (random * max-min+1) + min
-          const heartRate = Math.floor(Math.random() * (120 - 50 + 1)) + 50; // generates value between 50 and 120
-          const spo2 = Math.floor(Math.random() * (100 - 90 + 1)) + 90; generates value between 90 and 100
-          const temperature = parseFloat((Math.random() * (38.5 - 36.0) + 36.0).toFixed(1));
-          generates value between 36.0 and 38.5
-*/        const heartRate = Math.floor(Math.random() * (77 - 65 + 1)) + 65;
-          const spo2 = Math.floor(Math.random() * (100 - 95 + 1)) + 95;
-          const temperature = parseFloat((Math.random() * (37.5 - 36.5) + 36.5).toFixed(1));
-          // Set active threshold evaluation
+          // ── Vital Signs Simulation ───────────────────────────────────────────
+          // Most readings are NORMAL (90% of the time) to avoid saturating the
+          // 15-minute alert cooldown. A 10% "spike" mode simulates a real emergency.
+          const isAnomalySpike = Math.random() < 0.10; // 10% chance of simulated emergency
+
+          const heartRate = Math.floor(Math.random() * (95 - 65 + 1)) + 65;
+          const spo2 = Math.floor(Math.random() * (100 - 97 + 1)) + 97;
+          const temperature = +(Math.random() * (37.2 - 36.2) + 36.2).toFixed(1);
+
+          const bloodPressureSystolic  = Math.floor(Math.random() * (130 - 110 + 1)) + 110;
+          const bloodPressureDiastolic = Math.floor(Math.random() * (85  - 70  + 1)) + 70;
+          const bloodGlucose           = Math.floor(Math.random() * (120 - 90  + 1)) + 90;
+
+          // Evaluate anomaly flags against clinical thresholds
           const anomalyFlags = {
-            heartRateAnomaly: heartRate > 100 || heartRate < 60,
-            spo2Anomaly: spo2 < 95,
-            temperatureAnomaly: temperature > 37.5 || temperature < 36.0,
+            heartRateAnomaly:    heartRate > 100 || heartRate < 60,
+            spo2Anomaly:         spo2 < 95,
+            temperatureAnomaly:  temperature > 37.5 || temperature < 36.0,
+            bloodPressureAnomaly: false,
+            bloodGlucoseAnomaly:  false
           };
 
           const vitalSignData = {
@@ -90,6 +96,9 @@ const initializeSockets = (io) => {
             heartRate,
             spo2,
             temperature,
+            bloodPressureSystolic,
+            bloodPressureDiastolic,
+            bloodGlucose,
             anomalyFlags,
             timestamp: new Date()
           };
@@ -100,12 +109,27 @@ const initializeSockets = (io) => {
           // Push vitals object event directly into their encapsulated user tunnel
           io.to(roomName).emit('vitals:update', savedVital);
 
-          // Evaluate isolated flags trigger system for direct 'alert:triggered' execution sequences
-          if (anomalyFlags.heartRateAnomaly || anomalyFlags.spo2Anomaly || anomalyFlags.temperatureAnomaly) {
-            io.to(roomName).emit('alert:triggered', {
-              message: 'Abnormal vital sign detected!',
-              vitals: savedVital
+          // Determine if there are any anomalies triggered
+          const hasAnomaly = Object.values(anomalyFlags).some(flag => flag === true);
+
+          if (hasAnomaly) {
+            // Automatically process alert (logs alert history, respects cooldown)
+            const alertResult = await processEmergencyAlert(socket.user, {
+              emergencyType: 'Abnormal Vitals Detected (Simulated)',
+              vitals: savedVital,
+              location: null
             });
+
+            if (alertResult && alertResult.success) {
+              // Emit to frontend to display warning toast and play sound/device alert
+              io.to(roomName).emit('alert:triggered', {
+                message: 'Abnormal vital sign detected!',
+                vitals: savedVital,
+                cooldown: alertResult.cooldown,
+                alertText: alertResult.alertText || 'Critical Health Warning',
+                severity: alertResult.severity || 'WARNING'
+              });
+            }
           }
 
         } catch (error) {
@@ -116,36 +140,36 @@ const initializeSockets = (io) => {
       userIntervals.set(userId, intervalId);
     }
 
-// Capture standard disconnected garbage collection
-     socket.on('disconnect', async () => {
-       console.log(`[Socket Disconnected] Socket ${socket.id} closed for user ${userId}`);
+    // Capture standard disconnected garbage collection
+    socket.on('disconnect', async () => {
+      console.log(`[Socket Disconnected] Socket ${socket.id} closed for user ${userId}`);
 
-       // Check multi-user simultaneous connections across various tabs iteratively
-       const socketsInRoom = await io.in(roomName).fetchSockets();
-       if (socketsInRoom.length === 0) {
-         // Safe to clear data generation algorithms locally
-         if (userIntervals.has(userId)) {
-           clearInterval(userIntervals.get(userId));
-           userIntervals.delete(userId);
-           console.log(`[Simulation Stopped] Cleaned up generation for user ${userId}`);
-         }
-       }
-     });
+      // Check multi-user simultaneous connections across various tabs iteratively
+      const socketsInRoom = await io.in(roomName).fetchSockets();
+      if (socketsInRoom.length === 0) {
+        // Safe to clear data generation algorithms locally
+        if (userIntervals.has(userId)) {
+          clearInterval(userIntervals.get(userId));
+          userIntervals.delete(userId);
+          console.log(`[Simulation Stopped] Cleaned up generation for user ${userId}`);
+        }
+      }
+    });
 
-     // Handle real-time step updates from mobile sensors
-     socket.on('steps:update', async (data) => {
-       try {
-         // The data from frontend is already the latest absolute values saved via API
-         // So we just need to broadcast it to other clients in the same room
-         io.to(roomName).emit('steps:updated', {
-           steps: data.steps,
-           calories: data.calories,
-           distance: data.distance
-         });
-       } catch (error) {
-         console.error('Step update error:', error);
-       }
-     });
+    // Handle real-time step updates from mobile sensors
+    socket.on('steps:update', async (data) => {
+      try {
+        // The data from frontend is already the latest absolute values saved via API
+        // So we just need to broadcast it to other clients in the same room
+        io.to(roomName).emit('steps:updated', {
+          steps: data.steps,
+          calories: data.calories,
+          distance: data.distance
+        });
+      } catch (error) {
+        console.error('Step update error:', error);
+      }
+    });
 
   });
 };

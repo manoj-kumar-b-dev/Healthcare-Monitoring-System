@@ -1,14 +1,59 @@
 const VitalSign = require('../models/VitalSign');
+const { processEmergencyAlert } = require('./alertController');
+
+// Helper to emit events via Socket Bridge when running in serverless mode (Vercel)
+const emitViaBridge = async (room, event, payload) => {
+  const bridgeUrl = process.env.SOCKET_BRIDGE_URL;
+  const bridgeSecret = process.env.SOCKET_BRIDGE_SECRET;
+
+  if (!bridgeUrl || !bridgeSecret) {
+    console.log(`[Socket Bridge] Skipped emitting '${event}' (bridge not configured)`);
+    return;
+  }
+
+  try {
+    const url = `${bridgeUrl.replace(/\/$/, '')}/api/socket-bridge/emit`;
+    console.log(`[Socket Bridge] Dispatching event '${event}' to room '${room}' via ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        secret: bridgeSecret,
+        room,
+        event,
+        payload
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`[Socket Bridge] Bridge server returned status ${response.status}: ${errorText}`);
+    } else {
+      console.log(`[Socket Bridge] Event '${event}' successfully bridged`);
+    }
+  } catch (error) {
+    console.error(`[Socket Bridge] Failed to send event to bridge:`, error.message);
+  }
+};
 
 // @desc    Create new vital signs record with anomaly detection
 // @route   POST /api/vitals
 // @access  Private
 const createVitalSign = async (req, res, next) => {
   try {
-    const { heartRate, spo2, temperature } = req.body;
+    const { 
+      heartRate, 
+      spo2, 
+      temperature, 
+      bloodPressureSystolic, 
+      bloodPressureDiastolic, 
+      bloodGlucose,
+      location 
+    } = req.body;
     const userId = req.user._id;
 
-    console.log(`[VitalsController] createVitalSign - userId: ${userId}, HR: ${heartRate}, SpO2: ${spo2}, Temp: ${temperature}`);
+    console.log(`[VitalsController] createVitalSign - userId: ${userId}, HR: ${heartRate}, SpO2: ${spo2}, Temp: ${temperature}, BP: ${bloodPressureSystolic}/${bloodPressureDiastolic}, BG: ${bloodGlucose}`);
 
     // Validate input
     if (!heartRate || !spo2 || !temperature) {
@@ -39,11 +84,34 @@ const createVitalSign = async (req, res, next) => {
       });
     }
 
+    // Optional field validation
+    if (bloodPressureSystolic !== undefined && (typeof bloodPressureSystolic !== 'number' || bloodPressureSystolic < 0 || bloodPressureSystolic > 300)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Blood pressure systolic must be between 0 and 300 mmHg' 
+      });
+    }
+    if (bloodPressureDiastolic !== undefined && (typeof bloodPressureDiastolic !== 'number' || bloodPressureDiastolic < 0 || bloodPressureDiastolic > 200)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Blood pressure diastolic must be between 0 and 200 mmHg' 
+      });
+    }
+    if (bloodGlucose !== undefined && (typeof bloodGlucose !== 'number' || bloodGlucose < 0 || bloodGlucose > 1000)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Blood glucose must be between 0 and 1000 mg/dL' 
+      });
+    }
+
     // Determine anomaly flags
     const anomalyFlags = {
       heartRateAnomaly: heartRate > 100 || heartRate < 60,
       spo2Anomaly: spo2 < 95,
       temperatureAnomaly: temperature > 37.5 || temperature < 36.0,
+      bloodPressureAnomaly: (bloodPressureSystolic !== undefined && (bloodPressureSystolic > 140 || bloodPressureSystolic < 90)) ||
+                            (bloodPressureDiastolic !== undefined && (bloodPressureDiastolic > 90 || bloodPressureDiastolic < 60)),
+      bloodGlucoseAnomaly: bloodGlucose !== undefined && (bloodGlucose > 180 || bloodGlucose < 70)
     };
 
     const vitalSign = await VitalSign.create({
@@ -51,16 +119,66 @@ const createVitalSign = async (req, res, next) => {
       heartRate,
       spo2,
       temperature,
+      bloodPressureSystolic,
+      bloodPressureDiastolic,
+      bloodGlucose,
       anomalyFlags,
       timestamp: new Date()  // Explicitly set timestamp to ensure UTC
     });
 
     console.log(`[VitalsController] Vital record created: ${vitalSign._id}, anomalies: ${Object.values(anomalyFlags).filter(Boolean).length}`);
 
+    // Determine if there are any anomalies triggered
+    const hasAnomaly = Object.values(anomalyFlags).some(flag => flag === true);
+    
+    // Broadcast via socket.io if server io is configured, otherwise fallback to Socket Bridge
+    const io = req.app.get('socketio');
+    const roomName = `user_${userId}`;
+    if (io) {
+      io.to(roomName).emit('vitals:update', vitalSign);
+    } else {
+      emitViaBridge(roomName, 'vitals:update', vitalSign);
+    }
+
+    let alertResult = null;
+    if (hasAnomaly) {
+      console.log(`[VitalsController] Abnormal vitals detected. Triggering emergency alert processing...`);
+      alertResult = await processEmergencyAlert(req.user, {
+        emergencyType: 'Abnormal Vitals Detected',
+        vitals: vitalSign,
+        location: location || null
+      });
+
+      if (alertResult && alertResult.success) {
+        console.log(`[VitalsController] Alert triggered successfully. Contacts: ${alertResult.contacts}`);
+        const alertPayload = {
+          message: 'Abnormal vital sign detected!',
+          vitals: vitalSign,
+          cooldown: alertResult.cooldown,
+          alertText: alertResult.alertText || 'Critical Health Warning',
+          severity: alertResult.severity || 'WARNING'
+        };
+        if (io) {
+          const roomName = `user_${userId}`;
+          io.to(roomName).emit('alert:triggered', alertPayload);
+        } else {
+          emitViaBridge(roomName, 'alert:triggered', alertPayload);
+        }
+      } else {
+        console.warn(`[VitalsController] Alert processing failed: ${alertResult?.reason || 'Unknown reason'}`);
+      }
+    }
+
     res.status(201).json({
       success: true,
       data: vitalSign,
-      message: 'Vital signs recorded successfully'
+      alertTriggered: hasAnomaly && alertResult && alertResult.success,
+      alertCooldown: alertResult ? alertResult.cooldown : false,
+      message: (hasAnomaly && alertResult && alertResult.success)
+        ? (alertResult.cooldown 
+            ? 'Vital signs recorded. Alert logged (cooldown prevented contact spam).' 
+            : 'Vital signs recorded. Emergency alerts triggered.') 
+        : 'Vital signs recorded successfully'
     });
   } catch (error) {
     console.error('[VitalsController] createVitalSign error:', error);
@@ -155,11 +273,59 @@ const getVitalHistory = async (req, res, next) => {
     const maxLimit = Math.min(parseInt(limit, 10) || 100, 500);
     console.log(`[VitalsController] Limit set to: ${maxLimit}`);
 
-    // Fetch vitals from database
-    const vitals = await VitalSign.find(query)
-      .sort({ timestamp: 1 })  // Ascending order: oldest first for chart display
-      .limit(maxLimit)
-      .lean();  // Use lean() for better performance on read-only queries
+    // Determine aggregation grouping based on timeRange or date range length
+    let groupByHour = false;
+    if (timeRange === 'daily') {
+      groupByHour = true;
+    } else if (startDate && endDate) {
+      const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime();
+      if (diffMs <= 24 * 60 * 60 * 1000) {
+        groupByHour = true;
+      }
+    } else if (!timeRange && !startDate && !endDate) {
+      groupByHour = true;
+    }
+
+    const groupFields = groupByHour
+      ? {
+          year: { $year: '$timestamp' },
+          month: { $month: '$timestamp' },
+          day: { $dayOfMonth: '$timestamp' },
+          hour: { $hour: '$timestamp' }
+        }
+      : {
+          year: { $year: '$timestamp' },
+          month: { $month: '$timestamp' },
+          day: { $dayOfMonth: '$timestamp' }
+        };
+
+    const pipeline = [
+      { $match: query },
+      {
+        $group: {
+          _id: groupFields,
+          firstId: { $first: '$_id' },
+          timestamp: { $min: '$timestamp' },
+          heartRate: { $avg: '$heartRate' },
+          spo2: { $avg: '$spo2' },
+          temperature: { $avg: '$temperature' }
+        }
+      },
+      {
+        $project: {
+          _id: '$firstId',
+          timestamp: 1,
+          heartRate: { $round: ['$heartRate', 1] },
+          spo2: { $round: ['$spo2', 1] },
+          temperature: { $round: ['$temperature', 1] }
+        }
+      },
+      { $sort: { timestamp: 1 } },
+      { $limit: maxLimit }
+    ];
+
+    // Fetch vitals from database using aggregation pipeline
+    const vitals = await VitalSign.aggregate(pipeline);
 
     console.log(`[VitalsController] Found ${vitals.length} vital records for user ${userId}`);
 

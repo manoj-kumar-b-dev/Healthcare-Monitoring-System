@@ -44,11 +44,10 @@ axiosInstance.interceptors.response.use(
     
     if (status === 401) {
       console.warn('[API] 401 Unauthorized - Token invalid or expired');
-      localStorage.removeItem('healthcare_token');
-      // Optionally redirect to login
-      if (typeof window !== 'undefined') {
-        // window.location.href = '/login'; // Uncomment if needed
-      }
+      // DO NOT remove the token here — removing on any 401 causes a cascade
+      // where background polling (e.g. health-score) wipes the token and
+      // the next manual action (e.g. SOS button) fires without authorization.
+      // Token cleanup and redirect is handled by AuthContext on page load.
     }
     
     if (status === 403) {

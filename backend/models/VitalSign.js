@@ -29,10 +29,24 @@ const vitalSignSchema = new mongoose.Schema({
     min: 20, // Arbitrary sensible min limit (Celsius)
     max: 45  // Arbitrary sensible max limit (Celsius)
   },
+  bloodPressureSystolic: {
+    type: Number,
+    min: 0
+  },
+  bloodPressureDiastolic: {
+    type: Number,
+    min: 0
+  },
+  bloodGlucose: {
+    type: Number,
+    min: 0
+  },
   anomalyFlags: {
     heartRateAnomaly: {   type: Boolean, default: false },
     spo2Anomaly: { type: Boolean, default: false },
-    temperatureAnomaly: { type: Boolean, default: false }
+    temperatureAnomaly: { type: Boolean, default: false },
+    bloodPressureAnomaly: { type: Boolean, default: false },
+    bloodGlucoseAnomaly: { type: Boolean, default: false }
   }
 });
 

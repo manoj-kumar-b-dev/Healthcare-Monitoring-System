@@ -35,25 +35,17 @@ const VitalsChart = () => {
       }
 
       if (range === 'daily') {
-        // For daily: show time HH:MM
+        // For daily: show 12-hour format with AM/PM (e.g. 08:00 AM)
         return date.toLocaleTimeString('en-US', { 
           hour: '2-digit', 
           minute: '2-digit',
-          hour12: false 
-        });
-      } else if (range === 'weekly') {
-        // For weekly: show weekday and date (Mon 23)
-        return date.toLocaleDateString('en-US', { 
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric'
+          hour12: true 
         });
       } else {
-        // For monthly: show date and month (May 23)
-        return date.toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric'
-        });
+        // For weekly/monthly: show short month and padded day (e.g. Jun 22, Jun 05)
+        const month = date.toLocaleDateString('en-US', { month: 'short' });
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${month} ${day}`;
       }
     } catch (err) {
       console.error('[VitalsChart] Error formatting timestamp:', err);
@@ -265,6 +257,7 @@ const VitalsChart = () => {
                 tick={{ fontSize: 11, fill: '#94A3B8', fontWeight: 500 }}
                 tickLine={false}
                 axisLine={{ stroke: '#E2E8F0' }}
+                minTickGap={25}
               />
               {(activeMetric === 'all' || activeMetric === 'heartRate' || activeMetric === 'spo2') && (
                 <YAxis

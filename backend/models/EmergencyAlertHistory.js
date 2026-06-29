@@ -41,6 +41,9 @@ const emergencyAlertHistorySchema = new mongoose.Schema({
     spo2:        { type: Number },
     temperature: { type: Number },
     healthScore: { type: Number },
+    bloodPressureSystolic: { type: Number },
+    bloodPressureDiastolic: { type: Number },
+    bloodGlucose: { type: Number },
   },
 
   locationSnapshot: {

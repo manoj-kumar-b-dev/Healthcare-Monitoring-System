@@ -24,8 +24,8 @@ const addContact = async (req, res, next) => {
       return res.status(400).json({ message: 'Please provide both name and phone number' });
     }
 
-    // Validate phone number loosely (permits +, () and dashes)
-    const phoneRegex = /^[+]?[(]?[0-9]{3}[)]?[-\s.]?[0-9]{3}[-\s.]?[0-9]{4,6}$/;
+    // Validate phone number loosely (permits +, (), spaces and dashes, 7-15 digits)
+    const phoneRegex = /^\+?[0-9\s\-()]{7,15}$/;
     if (!phoneRegex.test(phone)) {
       return res.status(400).json({ message: 'Please provide a valid phone number format' });
     }

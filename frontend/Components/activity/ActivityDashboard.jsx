@@ -346,29 +346,6 @@ const ActivityDashboard = () => {
 
       </div>
 
-      {/* HEALTH INSIGHTS ENGINE CARD */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-3xl border border-blue-150 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 hover:shadow-md transition-shadow">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white border border-blue-500 shadow-md shadow-blue-200">
-            <Heart className="w-6 h-6 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="font-extrabold text-slate-900 text-lg">Personalized Health Insight</h4>
-              <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${recommendation.badgeColor}`}>
-                {recommendation.badge}
-              </span>
-            </div>
-            <p className="text-slate-650 text-sm font-medium mt-1 max-w-2xl leading-relaxed">
-              {recommendation.description}
-            </p>
-          </div>
-        </div>
-        <div className="bg-white border border-blue-100 px-4 py-2.5 rounded-2xl flex flex-col justify-center min-w-[150px] text-center shadow-sm shrink-0">
-          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Physiological Impact</span>
-          <span className="text-xs font-bold text-blue-600 mt-0.5">{recommendation.impact}</span>
-        </div>
-      </div>
 
       {/* MAIN CHART COMPONENT (Weekly vs Monthly Tabs) */}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col w-full min-w-0">

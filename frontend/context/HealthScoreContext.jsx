@@ -100,8 +100,16 @@ export const HealthScoreProvider = ({ children }) => {
         setLastUpdated(data.timestamp ? new Date(data.timestamp) : new Date());
       }
     } catch (err) {
-      console.error('[HealthScoreContext] Failed to fetch health score:', err);
-      setError(err.response?.data?.message || 'Failed to load health score');
+      const status = err.response?.status;
+      // If 401, the health-score route may have been removed or token expired —
+      // log a warning and stop polling to avoid cascade errors.
+      if (status === 401 || status === 404) {
+        console.warn('[HealthScoreContext] Health score endpoint unavailable (status:', status, ') — skipping.');
+        setError(null); // Don't surface as a user-facing error
+      } else {
+        console.error('[HealthScoreContext] Failed to fetch health score:', err);
+        setError(err.response?.data?.message || 'Failed to load health score');
+      }
     } finally {
       setLoading(false);
       setIsFetching(false);
